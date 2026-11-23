@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Koerner Hall - 1780 Stein-Schule Fortepiano &amp; Spatial Acoustics</title>
+  <meta name="description" content="Интерактивная 3D-академия концертного рояля: 6 марок инструментов включая хрустальный рояль, живая педаль, регулируемая крышка, 3D-анимация нот, 5 мировых концертных залов и энциклопедия композиторов и жанров." />
+  <meta property="og:title" content="Koerner Hall - 1780 Stein-Schule Fortepiano &amp; Spatial Acoustics" />
+  <meta property="og:description" content="Интерактивная 3D-академия концертного рояля: 6 марок инструментов включая хрустальный рояль, живая педаль, регулируемая крышка, 3D-анимация нот, 5 мировых концертных залов и энциклопедия композиторов и жанров." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2318181B'/%3E%3Cpath d='M6 21 C11 11, 21 11, 26 21' stroke='%23D4A36A' stroke-width='2.5' fill='none'/%3E%3Cpath d='M9 24 C13 16, 19 16, 23 24' stroke='%23FAF9F6' stroke-width='1.6' fill='none'/%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="/src/styles.css" />
+</head>
+<body class="piano-mode">
+  <canvas id="webgl-canvas" aria-label="Концертный рояль 3D WebGL2 сцена"></canvas>
+
+  <!-- Subtle 61-key & 3-pedal hover label (hidden at rest) -->
+  <div id="seat-hover-pill" aria-hidden="true"></div>
+
+  <!-- Minimal Top Bar: Stage Camera Presets & Current Context -->
+  <header id="top-stage-bar" aria-label="Ракурсы камеры и текущее произведение">
+    <div id="piano-view-bar" role="toolbar" aria-label="Ракурсы камеры рояля">
+      <button type="button" class="piano-preset-btn active" data-piano-preset="bentside" title="Общий вид рояля (1)">Корпус</button>
+      <button type="button" class="piano-preset-btn" data-piano-preset="pianist" title="Вид на клавиатуру и ноты (2)">Клавиатура</button>
+      <button type="button" class="piano-preset-btn" data-piano-preset="harp" title="Струны и дека (3)">Дека</button>
+      <button type="button" class="piano-preset-btn" data-piano-preset="action" title="Молоточки и механика (4)">Механика</button>
+      <button type="button" class="piano-preset-btn" data-piano-preset="pedals" title="Трёхпедальная лира (5)">Педали</button>
+      <button type="button" class="piano-preset-btn" data-piano-preset="hall_view" title="Сцена и зал (6)">Сцена</button>
+    </div>
+  </header>
+
+  <!-- UNIFIED COLLAPSIBLE BOTTOM STUDIO DOCK (Zero Viewport Occlusion) -->
+  <div id="studio-dock-wrap">
+    <button type="button" id="hud-collapse-btn" class="hud-collapse-btn" title="Свернуть или раскрыть панель (клавиша H)">
+      &#9662; Скрыть панель
+    </button>
+
+    <div id="hud-capsule" role="toolbar" aria-label="Управление воспроизведением, роялем, педалью и залами">
+      <!-- Row 1: Academy + Transport + Timeline + Tempo -->
+      <div class="hud-row">
+        <button type="button" id="hud-academy-btn" class="hud-btn hud-academy-btn" title="Открыть меню композиторов, произведений, словаря жанров и залов (M)">
+          Академия и Репертуар
+        </button>
+        <span class="hud-sep" aria-hidden="true"></span>
+        <button type="button" id="hud-play-btn" class="hud-btn hud-play-btn" aria-label="Воспроизведение или пауза" title="Воспроизвести / Пауза (Пробел)">
+          &#9654;
+        </button>
+        <select id="hud-piece-select" class="hud-select hud-piece-select" aria-label="Выбор произведения" title="Быстрый выбор произведения"></select>
+        <input type="range" id="hud-scrub" class="hud-scrub" min="0" max="1000" value="0" aria-label="Позиция воспроизведения" title="Перемотка произведения" />
+        <span id="hud-time" class="hud-time hud-mono">0:00 / 3:13</span>
+        <span class="hud-sep" aria-hidden="true"></span>
+        <select id="hud-tempo-select" class="hud-select hud-tempo-select hud-mono" aria-label="Скорость обучения (темп)" title="Темп воспроизведения для разбора мелодий">
+          <option value="0.25">0.25x</option>
+          <option value="0.5">0.50x</option>
+          <option value="0.75">0.75x</option>
+          <option value="1" selected>1.00x</option>
+          <option value="1.25">1.25x</option>
+        </select>
+      </div>
+
+      <!-- Row 2: Piano Model, Keys, Pedal, Lid, Notes FX, World Hall, Listening Zone -->
+      <div class="hud-row hud-row-secondary">
+        <select id="hud-piano-select" class="hud-select hud-piano-select" aria-label="Выбор модели рояля" title="Сменить марку и звучание рояля"></select>
+        <button type="button" id="hud-keys-btn" class="hud-btn hud-toggle-btn" title="Переключить клавиши: белые с чёрными диезами или исторические">
+          Клавиши: Белые
+        </button>
+        <span class="hud-sep" aria-hidden="true"></span>
+        <button type="button" id="hud-pedal-btn" class="hud-btn hud-toggle-btn" title="Зажать или зафиксировать правую педаль сустейна (или удерживайте Shift)">
+          Педаль: Авто
+        </button>
+        <button type="button" id="hud-lid-btn" class="hud-btn hud-toggle-btn" title="Переключить угол крышки рояля (влияет на яркость и мягкость звука)">
+          Крышка: Открыта
+        </button>
+        <button type="button" id="hud-notes-btn" class="hud-btn hud-toggle-btn is-accent" title="Переключить 3D-анимацию нот: падающие ленты, частицы, оба или выкл">
+          Ноты: Оба
+        </button>
+        <span class="hud-sep" aria-hidden="true"></span>
+        <select id="hud-hall-select" class="hud-select hud-hall-select" aria-label="Выбор концертного зала" title="Выбор одного из 5 мировых концертных залов"></select>
+        <select id="hud-zone-select" class="hud-select hud-zone-select" aria-label="Точка слышимости в зале" title="Акустическая точка прослушивания в зале"></select>
+      </div>
+    </div>
+  </div>
+
+  <!-- MUSEUM-EDITORIAL MUSIC ACADEMY & COMPOSER ENCYCLOPEDIA OVERLAY -->
+  <div id="academy-modal" class="academy-backdrop" role="dialog" aria-modal="true" aria-label="Музыкальная академия и каталог произведений" hidden>
+    <div class="academy-sheet">
+      <div class="academy-header">
+        <div class="academy-brand">Музыкальная Академия</div>
+        <nav class="academy-tabs" role="tablist" aria-label="Разделы академии">
+          <button type="button" class="academy-tab active" data-academy-tab="works" role="tab" aria-selected="true">Произведения</button>
+          <button type="button" class="academy-tab" data-academy-tab="composers" role="tab" aria-selected="false">Композиторы</button>
+          <button type="button" class="academy-tab" data-academy-tab="genres" role="tab" aria-selected="false">Словарь жанров</button>
+          <button type="button" class="academy-tab" data-academy-tab="halls" role="tab" aria-selected="false">Залы и акустика</button>
+        </nav>
+        <button type="button" id="academy-close-btn" class="academy-close" aria-label="Закрыть академию" title="Закрыть (Esc)">&times;</button>
+      </div>
+      <div id="academy-body" class="academy-body"></div>
+    </div>
+  </div>
+
+  <!-- Minimal Warm-Carbon Loading Curtain -->
+  <div id="loading-curtain">
+    <div class="curtain-inner">
+      <div class="curtain-kicker">CONCERT GRAND 3D ACADEMY</div>
+      <div class="curtain-title">Концертный рояль 3D</div>
+      <div class="curtain-status" id="loading-status">Загрузка 3D-рояля, механики педалей и акустики мировых залов&hellip;</div>
+      <div class="curtain-bar-track"><div class="curtain-bar-fill" id="loading-bar"></div></div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
