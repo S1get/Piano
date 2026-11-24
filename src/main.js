@@ -43,6 +43,7 @@ import {
 } from "./concert_halls.js";
 import { getPieceAcademyMeta } from "./academy_catalog.js";
 import { createAcademyController } from "./academy_ui.js";
+import { buildHallStageArchitecture } from "./hall_architecture.js";
 
 // ============================================================================
 // 0. ERROR CAPTURE FOR DETERMINISTIC QA GATE
@@ -213,11 +214,20 @@ async function initKoernerHallExplorer() {
   const paramZone = urlParams.get("zone");
   const paramLid = urlParams.get("lid");
   const paramNotes = urlParams.get("notes");
+  const paramFalling = urlParams.get("falling");
+  const paramKeyGlow = urlParams.get("keyglow");
   const paramPlay = urlParams.get("play");
   const paramSeek = urlParams.get("seek");
   const paramFov = urlParams.get("fov");
   const paramHud = urlParams.get("hud");
   const paramExp = urlParams.get("exp");
+  const paramPerf = urlParams.get("perf");
+
+  const isMobileDevice =
+    Boolean(window.matchMedia?.("(pointer: coarse)")?.matches) ||
+    window.innerWidth <= 820 ||
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || "");
+  let ecoPerfMode = paramPerf === "eco" ? true : paramPerf === "high" ? false : isMobileDevice;
 
   const canvas = document.getElementById("webgl-canvas");
   const studioDockWrap = document.getElementById("studio-dock-wrap");
@@ -236,9 +246,12 @@ async function initKoernerHallExplorer() {
   const hudKeysBtn = document.getElementById("hud-keys-btn");
   const hudPedalBtn = document.getElementById("hud-pedal-btn");
   const hudLidBtn = document.getElementById("hud-lid-btn");
-  const hudNotesBtn = document.getElementById("hud-notes-btn");
+  const hudFallingBtn = document.getElementById("hud-falling-btn");
+  const hudKeyGlowBtn = document.getElementById("hud-keyglow-btn");
+  const hudPerfBtn = document.getElementById("hud-perf-btn");
   const hudHallSelect = document.getElementById("hud-hall-select");
   const hudZoneSelect = document.getElementById("hud-zone-select");
+  const hudSoftPedalBtn = document.getElementById("hud-soft-pedal-btn");
   const academyModal = document.getElementById("academy-modal");
   const hoverPill = document.getElementById("seat-hover-pill");
   const loadingCurtain = document.getElementById("loading-curtain");
@@ -251,25 +264,30 @@ async function initKoernerHallExplorer() {
   };
 
   const acoustics = new KoernerHallAcousticsEngine();
+  acoustics.setPerformanceProfile({ isMobile: ecoPerfMode });
   let fortepianoRig = null;
   let performancePlayer = null;
   let controller = null;
   let academyUI = null;
   let hallLightRig = null;
+  let hallArchRig = null;
+  let zoneSeatRig = null;
   let activeModelId = getPianoModel(paramModel || DEFAULT_PIANO_MODEL_ID).id;
   let activeKeyStyle = paramKeys === "historical" ? "historical" : DEFAULT_KEY_STYLE;
   let activeHallId = getConcertHall(paramHall || DEFAULT_HALL_ID).id;
   let activeZoneId = getListeningZone(paramZone || DEFAULT_ZONE_ID).id;
   let activeLidMode =
     paramLid === "closed" || paramLid === "half" ? paramLid : "open";
-  let activeNoteVizMode =
-    paramNotes === "falling" || paramNotes === "particles" || paramNotes === "off"
-      ? paramNotes
-      : "both";
+  // Default: ALL note visual effects OFF on startup (clean, authentic concert grand look)
+  let activeFallingNotes =
+    paramFalling === "1" || paramFalling === "true" || paramNotes === "falling" || paramNotes === "both";
+  let activeKeyGlow =
+    paramKeyGlow === "1" || paramKeyGlow === "true";
   let activeTempoRate = 1.0;
   let manualPedalLatched = false;
   let shiftPedalHeld = false;
   let unaCordaLatched = false;
+  let fazioliSoftLatched = false;
   let dockCollapsed = false;
 
   if (hudPieceSelect) {
@@ -337,20 +355,19 @@ async function initKoernerHallExplorer() {
   };
   syncLidButtonUI(activeLidMode);
 
-  const NOTE_VIZ_LABELS = {
-    both: "Ноты: Оба",
-    falling: "Ноты: Падающие",
-    particles: "Ноты: Частицы",
-    off: "Ноты: Выкл",
+  const syncFallingBtnUI = (enabled) => {
+    if (!hudFallingBtn) return;
+    hudFallingBtn.textContent = enabled ? "Падающие: Вкл" : "Падающие: Выкл";
+    hudFallingBtn.classList.toggle("is-accent", Boolean(enabled));
   };
-  const NOTE_VIZ_CYCLE = ["both", "falling", "particles", "off"];
+  syncFallingBtnUI(activeFallingNotes);
 
-  const syncNoteVizButtonUI = (mode) => {
-    if (!hudNotesBtn) return;
-    hudNotesBtn.textContent = NOTE_VIZ_LABELS[mode] || NOTE_VIZ_LABELS.both;
-    hudNotesBtn.classList.toggle("is-accent", mode !== "off");
+  const syncKeyGlowBtnUI = (enabled) => {
+    if (!hudKeyGlowBtn) return;
+    hudKeyGlowBtn.textContent = enabled ? "Подсветка: Вкл" : "Подсветка: Выкл";
+    hudKeyGlowBtn.classList.toggle("is-accent", Boolean(enabled));
   };
-  syncNoteVizButtonUI(activeNoteVizMode);
+  syncKeyGlowBtnUI(activeKeyGlow);
 
   const syncPedalUI = () => {
     const engaged = manualPedalLatched || shiftPedalHeld;
@@ -365,14 +382,35 @@ async function initKoernerHallExplorer() {
     }
   };
 
+  const syncFazioliSoftUI = () => {
+    acoustics.setFazioliSoft(fazioliSoftLatched);
+    if (hudSoftPedalBtn) {
+      hudSoftPedalBtn.textContent = fazioliSoftLatched ? "4-я педаль: Вкл" : "4-я педаль: Выкл";
+      hudSoftPedalBtn.classList.toggle("is-engaged", fazioliSoftLatched);
+    }
+  };
+
+  const syncPerfBtnUI = () => {
+    if (!hudPerfBtn) return;
+    hudPerfBtn.textContent = ecoPerfMode ? "Графика: Эко 60" : "Графика: Ультра";
+    hudPerfBtn.classList.toggle("is-active", ecoPerfMode);
+    hudPerfBtn.title = ecoPerfMode
+      ? "Режим Эко 60 FPS активен (экономия батареи и GPU на телефонах) — нажмите для Ультра"
+      : "Режим Ультра графики (высокий DPR, тени) — нажмите для Эко 60 FPS";
+  };
+  syncPerfBtnUI();
+
   [
     hudCollapseBtn,
     hudAcademyBtn,
     hudPlayBtn,
     hudKeysBtn,
     hudPedalBtn,
+    hudSoftPedalBtn,
     hudLidBtn,
-    hudNotesBtn,
+    hudFallingBtn,
+    hudKeyGlowBtn,
+    hudPerfBtn,
     ...pianoPresetBtns,
   ].forEach((btn) => {
     if (btn) btn.addEventListener("focus", () => btn.blur());
@@ -406,6 +444,11 @@ async function initKoernerHallExplorer() {
     });
   }
 
+  // On narrow phones, start with compact collapsed dock so 85%+ of the 3D grand piano is immediately visible
+  if (!hudHidden && window.innerWidth <= 680 && paramHud !== "open") {
+    setDockCollapsed(true);
+  }
+
   let idleTimer = null;
   const resetHudIdle = () => {
     if (hudCapsule) hudCapsule.classList.remove("idle");
@@ -421,7 +464,8 @@ async function initKoernerHallExplorer() {
 
   // Deferred callbacks bound once audio/rig/lighting are initialized
   let cycleLidPositionFn = null;
-  let cycleNoteVizModeFn = null;
+  let toggleFallingNotesFn = null;
+  let toggleKeyGlowFn = null;
 
   let lastHToggleMs = 0;
   window.addEventListener("keydown", (e) => {
@@ -473,7 +517,10 @@ async function initKoernerHallExplorer() {
       if (cycleLidPositionFn) cycleLidPositionFn();
       resetHudIdle();
     } else if ((e.code === "KeyN" || e.key === "n" || e.key === "N") && !e.metaKey && !e.ctrlKey && !e.altKey) {
-      if (cycleNoteVizModeFn) cycleNoteVizModeFn();
+      if (toggleFallingNotesFn) toggleFallingNotesFn();
+      resetHudIdle();
+    } else if ((e.code === "KeyK" || e.key === "k" || e.key === "K") && !e.metaKey && !e.ctrlKey && !e.altKey) {
+      if (toggleKeyGlowFn) toggleKeyGlowFn();
       resetHudIdle();
     }
   });
@@ -561,13 +608,29 @@ async function initKoernerHallExplorer() {
     },
     false
   );
-  renderer.setPixelRatio(isSoftwareGL ? 1 : Math.min(window.devicePixelRatio || 1, 2));
-  renderer.setSize(window.innerWidth, window.innerHeight, false);
+  const applyRendererPerfMode = () => {
+    const dpr = window.devicePixelRatio || 1;
+    const targetDpr = isSoftwareGL ? 1 : ecoPerfMode ? Math.min(dpr, 1.15) : Math.min(dpr, 2);
+    renderer.setPixelRatio(targetDpr);
+    renderer.setSize(window.innerWidth, window.innerHeight, false);
+    renderer.shadowMap.enabled = !ecoPerfMode && !isSoftwareGL;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    acoustics.setPerformanceProfile({ isMobile: ecoPerfMode });
+  };
+  applyRendererPerfMode();
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.AgXToneMapping;
   renderer.toneMappingExposure = paramExp ? Number(paramExp) : 1.0;
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+  if (hudPerfBtn) {
+    hudPerfBtn.addEventListener("click", () => {
+      ecoPerfMode = !ecoPerfMode;
+      syncPerfBtnUI();
+      applyRendererPerfMode();
+      markDirty();
+      resetHudIdle();
+    });
+  }
 
   const maxAniso = Math.min(16, renderer.capabilities.getMaxAnisotropy());
   const scene = new THREE.Scene();
@@ -624,7 +687,7 @@ async function initKoernerHallExplorer() {
     renderer.toneMappingExposure = Number(bakeMeta.recommended_exposure);
   }
 
-  const effectiveAniso = isSoftwareGL ? 4 : maxAniso;
+  const effectiveAniso = isSoftwareGL || ecoPerfMode ? Math.min(4, maxAniso) : maxAniso;
 
   setProgress(42, "Загрузка 3D-модели рояля и акустической сцены…");
   const tAssets0 = performance.now();
@@ -760,6 +823,7 @@ async function initKoernerHallExplorer() {
     maxAniso: effectiveAniso,
     acoustics,
     isSoftwareGL,
+    isMobile: ecoPerfMode,
     onWakeRender: markDirty,
   })
     .then((rig) => {
@@ -788,6 +852,14 @@ async function initKoernerHallExplorer() {
       if (hudPianoSelect.value !== model.id) hudPianoSelect.value = model.id;
       hudPianoSelect.title = `${model.label} — ${model.subtitle}`;
     }
+    const has4th = Boolean(model.visual?.hasFourthPedal);
+    if (hudSoftPedalBtn) {
+      hudSoftPedalBtn.hidden = !has4th;
+    }
+    if (!has4th && fazioliSoftLatched) {
+      fazioliSoftLatched = false;
+      syncFazioliSoftUI();
+    }
     if (fortepianoRig) {
       fortepianoRig.setPianoModel(model.id);
     }
@@ -815,14 +887,34 @@ async function initKoernerHallExplorer() {
     markDirty();
   };
 
-  const applySelectedNoteVizMode = (mode) => {
-    const safeMode = NOTE_VIZ_CYCLE.includes(mode) ? mode : "both";
-    activeNoteVizMode = safeMode;
-    syncNoteVizButtonUI(safeMode);
+  const applyFallingNotesEnabled = (enabled) => {
+    activeFallingNotes = Boolean(enabled);
+    syncFallingBtnUI(activeFallingNotes);
     if (fortepianoRig) {
-      fortepianoRig.setNoteVizMode(safeMode);
+      fortepianoRig.setFallingNotesEnabled(activeFallingNotes);
     }
     markDirty();
+  };
+
+  const applyKeyGlowEnabled = (enabled) => {
+    activeKeyGlow = Boolean(enabled);
+    syncKeyGlowBtnUI(activeKeyGlow);
+    if (fortepianoRig) {
+      fortepianoRig.setKeyGlowEnabled(activeKeyGlow);
+    }
+    markDirty();
+  };
+
+  const applySelectedNoteVizMode = (mode) => {
+    if (mode === "both" || mode === "falling") {
+      applyFallingNotesEnabled(true);
+    } else if (mode === "off") {
+      applyFallingNotesEnabled(false);
+      applyKeyGlowEnabled(false);
+    } else if (mode === "particles" && fortepianoRig) {
+      fortepianoRig.setNoteVizMode("particles");
+      markDirty();
+    }
   };
 
   const applySelectedTempoRate = (rate) => {
@@ -845,6 +937,9 @@ async function initKoernerHallExplorer() {
       hudHallSelect.title = `${hall.name} (${hall.city}) · RT60 ${hall.rt60Label}`;
     }
     acoustics.setConcertHall(hall.id);
+    if (hallArchRig) {
+      hallArchRig.setActiveHall(hall.id);
+    }
     if (hallLightRig) {
       hallLightRig.applyHallLighting(hall);
     }
@@ -852,7 +947,7 @@ async function initKoernerHallExplorer() {
     markDirty();
   };
 
-  const applySelectedListeningZone = (zoneId, immediate = false) => {
+  const applySelectedListeningZone = (zoneId, immediate = false, { moveCamera = false } = {}) => {
     const zone = getListeningZone(zoneId);
     activeZoneId = zone.id;
     if (hudZoneSelect) {
@@ -860,6 +955,16 @@ async function initKoernerHallExplorer() {
       hudZoneSelect.title = `${zone.name} (${zone.distanceLabel}) — ${zone.description}`;
     }
     acoustics.setListeningZone(zone.id, immediate);
+    if (zoneSeatRig) {
+      zoneSeatRig.setActiveZone(zone.id);
+    }
+    if (moveCamera && controller) {
+      if (zone.id === "pianist") {
+        controller.focusPiano("pianist", { immediate });
+      } else if (zone.cameraPos && zone.lookAt) {
+        controller.focusWorldPose(zone.cameraPos, zone.lookAt, zone.fov || 41.0, { immediate });
+      }
+    }
     if (academyUI) academyUI.refresh();
     markDirty();
   };
@@ -869,15 +974,19 @@ async function initKoernerHallExplorer() {
     applySelectedLidPosition(LID_CYCLE[(idx + 1) % LID_CYCLE.length]);
   };
 
-  cycleNoteVizModeFn = () => {
-    const idx = NOTE_VIZ_CYCLE.indexOf(activeNoteVizMode);
-    applySelectedNoteVizMode(NOTE_VIZ_CYCLE[(idx + 1) % NOTE_VIZ_CYCLE.length]);
+  toggleFallingNotesFn = () => {
+    applyFallingNotesEnabled(!activeFallingNotes);
+  };
+
+  toggleKeyGlowFn = () => {
+    applyKeyGlowEnabled(!activeKeyGlow);
   };
 
   applySelectedPianoModel(activeModelId);
   applySelectedKeyStyle(activeKeyStyle);
   applySelectedLidPosition(activeLidMode);
-  applySelectedNoteVizMode(activeNoteVizMode);
+  applyFallingNotesEnabled(activeFallingNotes);
+  applyKeyGlowEnabled(activeKeyGlow);
 
   if (hudPianoSelect) {
     hudPianoSelect.addEventListener("change", () => {
@@ -906,6 +1015,16 @@ async function initKoernerHallExplorer() {
     });
   }
 
+  if (hudSoftPedalBtn) {
+    hudSoftPedalBtn.addEventListener("click", () => {
+      acoustics.resumeNonBlocking();
+      fazioliSoftLatched = !fazioliSoftLatched;
+      syncFazioliSoftUI();
+      markDirty();
+      resetHudIdle();
+    });
+  }
+
   if (hudLidBtn) {
     hudLidBtn.addEventListener("click", () => {
       acoustics.resumeNonBlocking();
@@ -914,9 +1033,16 @@ async function initKoernerHallExplorer() {
     });
   }
 
-  if (hudNotesBtn) {
-    hudNotesBtn.addEventListener("click", () => {
-      cycleNoteVizModeFn();
+  if (hudFallingBtn) {
+    hudFallingBtn.addEventListener("click", () => {
+      toggleFallingNotesFn();
+      resetHudIdle();
+    });
+  }
+
+  if (hudKeyGlowBtn) {
+    hudKeyGlowBtn.addEventListener("click", () => {
+      toggleKeyGlowFn();
       resetHudIdle();
     });
   }
@@ -933,7 +1059,7 @@ async function initKoernerHallExplorer() {
   if (hudZoneSelect) {
     hudZoneSelect.addEventListener("change", () => {
       acoustics.resumeNonBlocking();
-      applySelectedListeningZone(hudZoneSelect.value, false);
+      applySelectedListeningZone(hudZoneSelect.value, false, { moveCamera: true });
       hudZoneSelect.blur();
       resetHudIdle();
     });
@@ -991,7 +1117,7 @@ async function initKoernerHallExplorer() {
     onPieceChange: (piece) => {
       syncPieceTooltips(piece, Boolean(performancePlayer?.playing));
       if (fortepianoRig && piece) {
-        fortepianoRig.setScorePiece(getPieceAcademyMeta(piece));
+        fortepianoRig.setScorePiece(piece, getPieceAcademyMeta(piece));
       }
       if (academyUI) academyUI.refresh();
       markDirty();
@@ -1003,7 +1129,10 @@ async function initKoernerHallExplorer() {
   });
   syncPieceTooltips(performancePlayer.currentPiece, false);
   if (fortepianoRig && performancePlayer.currentPiece) {
-    fortepianoRig.setScorePiece(getPieceAcademyMeta(performancePlayer.currentPiece));
+    fortepianoRig.setScorePiece(
+      performancePlayer.currentPiece,
+      getPieceAcademyMeta(performancePlayer.currentPiece)
+    );
   }
   if (paramPiece) {
     await performancePlayer.selectPiece(paramPiece, false);
@@ -1031,7 +1160,8 @@ async function initKoernerHallExplorer() {
       },
       onSelectZone: (zoneId) => {
         acoustics.resumeNonBlocking();
-        applySelectedListeningZone(zoneId, false);
+        applySelectedListeningZone(zoneId, false, { moveCamera: true });
+        if (academyUI) academyUI.close();
         resetHudIdle();
       },
       onClose: () => {
@@ -1318,9 +1448,38 @@ async function initKoernerHallExplorer() {
     console.warn("[KoernerHall] Using fallback concert stage:", err);
   }
 
+  let fallbackHallGroup = null;
   if (!hallLoaded) {
-    buildFallbackConcertStage(scene);
+    fallbackHallGroup = buildFallbackConcertStage(scene);
   }
+
+  // Collect all hall architectural materials so switching among the 5 world concert halls
+  // visibly transforms the 3D hall walls, oak canopy, sconces, lightmap brightness, and velvet seats.
+  const hallArchMaterialRecords = [];
+  const seenArchMats = new Set();
+  const hallRootForGrading = batchedHallGroup || fallbackHallGroup;
+  if (hallRootForGrading) {
+    hallRootForGrading.traverse((obj) => {
+      if (!obj.isMesh || !obj.material) return;
+      const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
+      for (const m of mats) {
+        if (!m || seenArchMats.has(m)) continue;
+        seenArchMats.add(m);
+        hallArchMaterialRecords.push({
+          mat: m,
+          origColor: m.color ? m.color.clone() : new THREE.Color(0xffffff),
+          origLightMapIntensity: m.lightMapIntensity ?? 1.0,
+          isEmissiveLens: m.name === "Batch_Emissive_Lenses",
+        });
+      }
+    });
+  }
+
+  // Build bespoke 3D stage architecture sets for Musikverein, Carnegie Hall, Royal Albert Hall & Suntory Studio
+  hallArchRig = buildHallStageArchitecture(scene);
+
+  // Build 1 physical clickable 3D velvet concert seat per auditorium listening zone (6 seats total)
+  zoneSeatRig = buildZoneShowcaseSeats(scene);
 
   const baseExposure =
     paramExp && Number.isFinite(Number(paramExp))
@@ -1333,7 +1492,9 @@ async function initKoernerHallExplorer() {
     renderer,
     hasBakedLightmaps,
     baseExposure,
-    Boolean(paramExp)
+    Boolean(paramExp),
+    hallArchMaterialRecords,
+    zoneSeatRig
   );
   applySelectedConcertHall(activeHallId);
 
@@ -1345,7 +1506,7 @@ async function initKoernerHallExplorer() {
     controller.applyExplicitFovDeg(Number(paramFov));
   }
   controller.focusPiano(initialPreset, { immediate: true });
-  applySelectedListeningZone(activeZoneId, true);
+  applySelectedListeningZone(activeZoneId, true, { moveCamera: false });
 
   if (paramSeek !== null && Number.isFinite(Number(paramSeek))) {
     performancePlayer.seek(Number(paramSeek));
@@ -1411,8 +1572,14 @@ async function initKoernerHallExplorer() {
           statusMsg = unaCordaLatched
             ? "Левая педаль Una Corda · Мягкий тембр вкл."
             : "Левая педаль Una Corda · Выкл.";
+        } else if (hitPedal === "fazioli_soft") {
+          fazioliSoftLatched = !fazioliSoftLatched;
+          syncFazioliSoftUI();
+          statusMsg = fazioliSoftLatched
+            ? "4-я педаль Fazioli F308 · Мягкое пианиссимо вкл."
+            : "4-я педаль Fazioli F308 · Выкл.";
         } else {
-          statusMsg = "Средняя педаль Sostenuto · Декоративный механизм";
+          statusMsg = "Средняя педаль Sostenuto · Удержание аккорда";
         }
         if (!hudHidden && hoverPill) {
           hoverPill.textContent = statusMsg;
@@ -1435,6 +1602,33 @@ async function initKoernerHallExplorer() {
   };
   window.addEventListener("pointerup", releaseActivePointerKey);
   window.addEventListener("pointercancel", releaseActivePointerKey);
+
+  // Click any of the 6 physical 3D auditorium seats to sit there and hear binaural L/R acoustics
+  canvas.addEventListener("pointerup", (e) => {
+    if (
+      e.button !== 0 ||
+      controller.wasDragGesture ||
+      activePointerMidi >= FORTEPIANO_MIN_MIDI ||
+      (academyUI && academyUI.isOpen()) ||
+      !zoneSeatRig
+    ) {
+      return;
+    }
+    setRayFromClientEvent(e);
+    const hitZoneId = zoneSeatRig.pickZoneAtRay(pickRaycaster);
+    if (hitZoneId) {
+      acoustics.resumeNonBlocking();
+      applySelectedListeningZone(hitZoneId, false, { moveCamera: true });
+      const z = getListeningZone(hitZoneId);
+      if (!hudHidden && hoverPill && z) {
+        hoverPill.textContent = `${z.name} \u00B7 ${z.distanceLabel} \u00B7 Бинауральный звук`;
+        hoverPill.style.left = `${e.clientX}px`;
+        hoverPill.style.top = `${e.clientY}px`;
+        hoverPill.style.display = "block";
+      }
+      resetHudIdle();
+    }
+  });
 
   canvas.addEventListener("pointermove", (e) => {
     if (academyUI && academyUI.isOpen()) {
@@ -1461,14 +1655,14 @@ async function initKoernerHallExplorer() {
       return;
     }
 
-    if (controller._pointerDown || hudHidden || !fortepianoRig) {
+    if (controller._pointerDown || hudHidden || !fortepianoRig || e.pointerType === "touch") {
       hoverPill.style.display = "none";
       canvas.classList.remove("seat-hover");
       return;
     }
 
+    setRayFromClientEvent(e);
     if (camera.position.distanceTo(fortepianoRig.worldCenter) < 5.8) {
-      setRayFromClientEvent(e);
       const hoverMidi = fortepianoRig.pickKeyAtRay(pickRaycaster);
       if (hoverMidi >= FORTEPIANO_MIN_MIDI) {
         hoverPill.textContent = `${midiToNoteName(hoverMidi)} \u00B7 Нажмите или проведите по клавишам`;
@@ -1483,6 +1677,19 @@ async function initKoernerHallExplorer() {
       if (hoverPedal) {
         const label = fortepianoRig.pedalLabels?.[hoverPedal] || "Педаль рояля";
         hoverPill.textContent = `${label} \u00B7 Нажмите`;
+        hoverPill.style.left = `${e.clientX}px`;
+        hoverPill.style.top = `${e.clientY}px`;
+        hoverPill.style.display = "block";
+        canvas.classList.add("seat-hover");
+        return;
+      }
+    }
+
+    if (zoneSeatRig) {
+      const hoverZoneId = zoneSeatRig.pickZoneAtRay(pickRaycaster);
+      if (hoverZoneId) {
+        const z = getListeningZone(hoverZoneId);
+        hoverPill.textContent = `${z.name} \u00B7 Нажмите, чтобы сесть (наушники L/R)`;
         hoverPill.style.left = `${e.clientX}px`;
         hoverPill.style.top = `${e.clientY}px`;
         hoverPill.style.display = "block";
@@ -1541,9 +1748,12 @@ async function initKoernerHallExplorer() {
     setPianoModel: applySelectedPianoModel,
     setKeyStyle: applySelectedKeyStyle,
     setConcertHall: applySelectedConcertHall,
-    setListeningZone: applySelectedListeningZone,
+    setListeningZone: (zId, imm = false, opts = { moveCamera: true }) =>
+      applySelectedListeningZone(zId, imm, opts),
     setLidPosition: applySelectedLidPosition,
     setNoteVizMode: applySelectedNoteVizMode,
+    setFallingNotesEnabled: applyFallingNotesEnabled,
+    setKeyGlowEnabled: applyKeyGlowEnabled,
     setTempoRate: applySelectedTempoRate,
   };
 
@@ -1597,7 +1807,7 @@ async function initKoernerHallExplorer() {
       hallLoaded,
       hasBakedLightmaps,
       hallBatchCount,
-      totalSeats: 0,
+      totalSeats: zoneSeatRig ? zoneSeatRig.count : 0,
       instancedCount: 0,
       drawCalls,
       pianoModelId: activeModelId,
@@ -1605,7 +1815,9 @@ async function initKoernerHallExplorer() {
       hallId: activeHallId,
       zoneId: activeZoneId,
       lidMode: activeLidMode,
-      noteVizMode: activeNoteVizMode,
+      fallingNotesEnabled: activeFallingNotes,
+      keyGlowEnabled: activeKeyGlow,
+      noteVizMode: fortepianoRig ? fortepianoRig.getNoteVizMode() : "off",
       tempoRate: activeTempoRate,
       fortepianoLoaded: Boolean(fortepianoStats.loaded),
       fortepianoStats,
@@ -1638,7 +1850,6 @@ async function initKoernerHallExplorer() {
   let lastTime = performance.now();
   let lastRenderMs = 0;
   let lastMirrorMs = 0;
-  const mirrorIntervalMs = isSoftwareGL ? 600 : 66;
   const softwarePlayFrameMs = 300;
 
   function animate(now) {
@@ -1661,8 +1872,9 @@ async function initKoernerHallExplorer() {
       if (isSoftwareGL && !camMoved && !sceneDirty && now - lastRenderMs < softwarePlayFrameMs) {
         return;
       }
+      const curMirrorInterval = isSoftwareGL ? 600 : ecoPerfMode ? 180 : 66;
       const needMirrorRefresh =
-        camMoved || sceneDirty || now - lastMirrorMs >= mirrorIntervalMs;
+        camMoved || sceneDirty || now - lastMirrorMs >= curMirrorInterval;
       lastPos.copy(camera.position);
       lastQuat.copy(camera.quaternion);
       lastFov = camera.fov;
@@ -1928,9 +2140,11 @@ function setupConcertSpecularLights(
   renderer,
   hasBakedLightmaps,
   baseExposure = 0.72,
-  lockExposure = false
+  lockExposure = false,
+  hallArchMaterialRecords = [],
+  zoneSeatRig = null
 ) {
-  const specKey = new THREE.DirectionalLight(0xfff1dc, hasBakedLightmaps ? 0.14 : 0.45);
+  const specKey = new THREE.DirectionalLight(0xfff1dc, hasBakedLightmaps ? 0.22 : 0.48);
   specKey.position.set(-1.5, 11.0, 2.5);
   specKey.target.position.set(-0.2, 1.4, 3.6);
   scene.add(specKey);
@@ -1940,10 +2154,10 @@ function setupConcertSpecularLights(
   const stageAccentSpot = new THREE.SpotLight(
     0xffd5a0,
     hasBakedLightmaps ? 0.0 : 88.0,
-    30.0,
-    Math.PI * 0.28,
-    0.62,
-    1.45
+    34.0,
+    Math.PI * 0.32,
+    0.64,
+    1.35
   );
   stageAccentSpot.position.set(0.0, 10.2, 4.1);
   stageAccentSpot.target.position.set(0.0, 1.35, 3.65);
@@ -1958,10 +2172,10 @@ function setupConcertSpecularLights(
   const pianoFillSpot = new THREE.SpotLight(
     0xffe6c7,
     hasBakedLightmaps ? 0.0 : 58.0,
-    24.0,
-    Math.PI * 0.22,
+    26.0,
+    Math.PI * 0.26,
     0.68,
-    1.45
+    1.35
   );
   pianoFillSpot.position.set(-2.4, 9.2, 1.3);
   pianoFillSpot.target.position.set(0.15, 1.5, 3.65);
@@ -1976,6 +2190,8 @@ function setupConcertSpecularLights(
   scene.add(houseHemi);
 
   scene.fog = new THREE.FogExp2(0x1a1612, 0.008);
+  const archTintColor = new THREE.Color(0xffffff);
+  const emissiveTintColor = new THREE.Color(0xffffff);
 
   return {
     applyHallLighting(hall) {
@@ -1984,29 +2200,53 @@ function setupConcertSpecularLights(
       scene.background = new THREE.Color(l.bgHex);
       if (scene.fog) {
         scene.fog.color.setHex(l.fogHex);
-        scene.fog.density = hasBakedLightmaps ? l.fogDensity * 0.75 : l.fogDensity;
+        scene.fog.density = hasBakedLightmaps ? l.fogDensity * 0.85 : l.fogDensity;
       }
 
+      // 1. Real 3D architectural tinting & baked lightmap scaling so all 5 halls look unmistakably distinct
+      archTintColor.setHex(l.archTintHex ?? 0xffffff);
+      emissiveTintColor.setHex(l.emissiveTintHex ?? 0xffe4b8);
+      const lmMul = Number.isFinite(l.lightMapMul) ? l.lightMapMul : 1.0;
+
+      for (let i = 0; i < hallArchMaterialRecords.length; i++) {
+        const rec = hallArchMaterialRecords[i];
+        if (!rec.mat || !rec.mat.color) continue;
+        if (rec.isEmissiveLens) {
+          rec.mat.color.copy(rec.origColor).multiply(emissiveTintColor);
+        } else {
+          rec.mat.color.copy(rec.origColor).multiply(archTintColor);
+          if (rec.mat.lightMap) {
+            rec.mat.lightMapIntensity = rec.origLightMapIntensity * lmMul;
+          }
+        }
+      }
+
+      // 2. Match auditorium velvet seat upholstery to the active concert hall
+      if (zoneSeatRig && l.seatVelvetHex !== undefined) {
+        zoneSeatRig.setVelvetColor(l.seatVelvetHex);
+      }
+
+      // 3. Expressive stage key, accent, fill, and auditorium hemisphere lighting
       specKey.color.setHex(l.keyColor);
       specKey.intensity = hasBakedLightmaps
-        ? 0.14 * l.keyIntensity + l.stageAccentIntensity * 0.52
-        : 0.45 * l.keyIntensity;
+        ? 0.20 * l.keyIntensity + l.stageAccentIntensity * 0.85
+        : 0.50 * l.keyIntensity;
 
       stageAccentSpot.color.setHex(l.stageAccentColor);
       stageAccentSpot.intensity = hasBakedLightmaps
-        ? l.stageAccentIntensity * 34.0
-        : 88.0 * l.keyIntensity;
+        ? l.stageAccentIntensity * 62.0
+        : 96.0 * l.keyIntensity;
 
       pianoFillSpot.color.setHex(l.fillColor);
       pianoFillSpot.intensity = hasBakedLightmaps
-        ? l.stageAccentIntensity * 16.0
-        : 58.0 * l.fillIntensity;
+        ? l.stageAccentIntensity * 28.0
+        : 62.0 * l.fillIntensity;
 
       houseHemi.color.setHex(l.hemiSky);
       houseHemi.groundColor.setHex(l.hemiGround);
       houseHemi.intensity = hasBakedLightmaps
-        ? l.stageAccentIntensity * 0.18
-        : 0.72 * l.hemiIntensity;
+        ? 0.08 + l.stageAccentIntensity * 0.34
+        : 0.76 * l.hemiIntensity;
 
       if (!lockExposure) {
         const expRatio = l.exposure / 0.72;
@@ -2016,7 +2256,140 @@ function setupConcertSpecularLights(
   };
 }
 
+/**
+ * Builds 1 physical, clickable upholstered 3D concert hall seat in each of the 6 auditorium
+ * listening zones (Parterre Center/Left/Right, Balcony Left/Right, Upper Balcony) using shared
+ * geometries & materials so mobile GPU overhead stays negligible (< 12 draw calls).
+ */
+function buildZoneShowcaseSeats(scene) {
+  const seatZones = LISTENING_ZONES.filter((z) => z.hasSeatMesh && Array.isArray(z.seatPos));
+  const root = new THREE.Group();
+  root.name = "KoernerHall_ZoneSeats";
+
+  // Shared materials
+  const velvetMat = new THREE.MeshPhysicalMaterial({
+    name: "ZoneSeat_Velvet",
+    color: 0x6e1a20,
+    roughness: 0.86,
+    metalness: 0.0,
+    sheen: 0.65,
+    sheenRoughness: 0.55,
+    sheenColor: new THREE.Color(0xc96b6b),
+  });
+  const oakFrameMat = new THREE.MeshStandardMaterial({
+    name: "ZoneSeat_OakFrame",
+    color: 0x3b2416,
+    roughness: 0.42,
+    metalness: 0.05,
+  });
+  const brassPedestalMat = new THREE.MeshStandardMaterial({
+    name: "ZoneSeat_Brass",
+    color: 0xc89d4c,
+    roughness: 0.32,
+    metalness: 0.86,
+  });
+  const pickProxyMat = new THREE.MeshBasicMaterial({
+    visible: false,
+    side: THREE.DoubleSide,
+  });
+
+  // Shared geometries
+  const cushionGeo = new THREE.BoxGeometry(0.56, 0.11, 0.50);
+  const backGeo = new THREE.BoxGeometry(0.56, 0.66, 0.10);
+  const sidePanelGeo = new THREE.BoxGeometry(0.055, 0.62, 0.52);
+  const armGeo = new THREE.BoxGeometry(0.075, 0.045, 0.46);
+  const pedestalGeo = new THREE.CylinderGeometry(0.05, 0.08, 0.38, 12);
+  const ringGeo = new THREE.RingGeometry(0.46, 0.56, 32);
+  ringGeo.rotateX(-Math.PI * 0.5);
+  const pickBoxGeo = new THREE.BoxGeometry(0.95, 1.25, 0.95);
+
+  const pickMeshes = [];
+  const ringMatsByZone = new Map();
+
+  for (const zone of seatZones) {
+    const grp = new THREE.Group();
+    grp.name = `ZoneSeat_${zone.id}`;
+    grp.position.set(zone.seatPos[0], zone.seatPos[1], zone.seatPos[2]);
+    grp.rotation.y = zone.seatYaw || 0.0;
+
+    // Pedestal base
+    const ped = new THREE.Mesh(pedestalGeo, brassPedestalMat);
+    ped.position.set(0, 0.19, 0);
+    grp.add(ped);
+
+    // Velvet seat cushion (faces +Z toward stage)
+    const cushion = new THREE.Mesh(cushionGeo, velvetMat);
+    cushion.position.set(0, 0.43, 0.02);
+    grp.add(cushion);
+
+    // Tall upholstered backrest (at -Z behind listener)
+    const backrest = new THREE.Mesh(backGeo, velvetMat);
+    backrest.position.set(0, 0.78, -0.22);
+    backrest.rotation.x = -0.14;
+    grp.add(backrest);
+
+    // Left & right oak side panels + armrests
+    for (const side of [-1, 1]) {
+      const panel = new THREE.Mesh(sidePanelGeo, oakFrameMat);
+      panel.position.set(side * 0.305, 0.34, -0.01);
+      grp.add(panel);
+
+      const arm = new THREE.Mesh(armGeo, oakFrameMat);
+      arm.position.set(side * 0.305, 0.65, 0.01);
+      grp.add(arm);
+    }
+
+    // Subtle brass floor indicator ring (highlights active seat in warm concert gold)
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: 0xd8a856,
+      transparent: true,
+      opacity: 0.38,
+      depthWrite: false,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.position.set(0, 0.018, 0);
+    grp.add(ring);
+    ringMatsByZone.set(zone.id, ringMat);
+
+    // Generous invisible click collider for crisp raycasting from stage or balcony
+    const pickMesh = new THREE.Mesh(pickBoxGeo, pickProxyMat);
+    pickMesh.position.set(0, 0.62, 0);
+    pickMesh.userData.zoneId = zone.id;
+    grp.add(pickMesh);
+    pickMeshes.push(pickMesh);
+
+    root.add(grp);
+  }
+
+  scene.add(root);
+
+  return {
+    group: root,
+    count: seatZones.length,
+    pickMeshes,
+    setVelvetColor(hex) {
+      velvetMat.color.setHex(hex);
+    },
+    setActiveZone(activeZoneId) {
+      for (const [zId, rMat] of ringMatsByZone.entries()) {
+        const isAct = zId === activeZoneId;
+        rMat.color.setHex(isAct ? 0xffe29a : 0xc69648);
+        rMat.opacity = isAct ? 0.92 : 0.34;
+      }
+    },
+    pickZoneAtRay(raycaster) {
+      const hits = raycaster.intersectObjects(pickMeshes, false);
+      if (hits.length > 0 && hits[0].object?.userData?.zoneId) {
+        return hits[0].object.userData.zoneId;
+      }
+      return null;
+    },
+  };
+}
+
 function buildFallbackConcertStage(scene) {
+  const grp = new THREE.Group();
+  grp.name = "Fallback_ConcertStage";
   const stageGeo = new THREE.BoxGeometry(18.0, 0.95, 11.2);
   stageGeo.translate(0, 0.475, 5.6);
   const stageMat = new THREE.MeshPhysicalMaterial({
@@ -2026,7 +2399,7 @@ function buildFallbackConcertStage(scene) {
   });
   const stageMesh = new THREE.Mesh(stageGeo, stageMat);
   stageMesh.name = "Preview_Stage_Oak";
-  scene.add(stageMesh);
+  grp.add(stageMesh);
 
   for (let i = 0; i < 6; i++) {
     const zThree = 9.0 - i * 3.6;
@@ -2040,8 +2413,10 @@ function buildFallbackConcertStage(scene) {
     const rib = new THREE.Mesh(ribGeo, ribMat);
     rib.position.set(0, yThree, zThree);
     rib.rotation.x = Math.cos(i * 0.5) * 0.14;
-    scene.add(rib);
+    grp.add(rib);
   }
+  scene.add(grp);
+  return grp;
 }
 
 initKoernerHallExplorer().catch((err) => {

@@ -159,7 +159,7 @@ export class KoernerCameraController {
     this.pianoTarget.copy(endTarget);
     this.pianoTargetGoal.copy(endTarget);
     const offset = this._vecTmp.copy(endPos).sub(endTarget);
-    const radius = Math.max(0.46, Math.min(7.8, offset.length() || 2.6));
+    const radius = Math.max(0.46, Math.min(30.0, offset.length() || 2.6));
     const phi = Math.acos(Math.max(-0.98, Math.min(0.98, offset.y / radius)));
     const theta = Math.atan2(offset.x, offset.z);
 
@@ -210,6 +210,72 @@ export class KoernerCameraController {
     this.onPianoPresetChange(this.activePianoPreset);
   }
 
+  /**
+   * Smoothly glide camera to an arbitrary world-space auditorium listening seat
+   * (e.g., Parterre Left/Center/Right, Balcony Left/Right, Upper Balcony) looking at the grand piano.
+   */
+  focusWorldPose(worldPosArr, worldTargetArr, fov = 40.0, { immediate = false } = {}) {
+    if (!Array.isArray(worldPosArr) || !Array.isArray(worldTargetArr)) return;
+    this.mode = "seat";
+    this.activePianoPreset = null;
+
+    const endPos = new THREE.Vector3(worldPosArr[0], worldPosArr[1], worldPosArr[2]);
+    const endTarget = new THREE.Vector3(worldTargetArr[0], worldTargetArr[1], worldTargetArr[2]);
+
+    this.pianoTarget.copy(endTarget);
+    this.pianoTargetGoal.copy(endTarget);
+    const offset = this._vecTmp.copy(endPos).sub(endTarget);
+    const radius = Math.max(0.46, Math.min(30.0, offset.length() || 6.0));
+    const phi = Math.acos(Math.max(-0.98, Math.min(0.98, offset.y / radius)));
+    const theta = Math.atan2(offset.x, offset.z);
+
+    this.pianoRadius = radius;
+    this.pianoRadiusGoal = radius;
+    this.pianoPhi = phi;
+    this.pianoPhiGoal = phi;
+    this.pianoTheta = theta;
+    this.pianoThetaGoal = theta;
+
+    this._lookMatTmp.lookAt(endPos, endTarget, new THREE.Vector3(0, 1, 0));
+    const endQuat = new THREE.Quaternion().setFromRotationMatrix(this._lookMatTmp);
+    const endFov = this.explicitFovOverrideDeg !== null ? this.explicitFovOverrideDeg : fov;
+
+    const isImmediate = Boolean(immediate || !this._hasInitializedPose);
+    if (isImmediate) {
+      this._hasInitializedPose = true;
+      this._glideActive = false;
+      this.camera.position.copy(endPos);
+      this.camera.quaternion.copy(endQuat);
+      this.camera.fov = endFov;
+      this.camera.updateProjectionMatrix();
+      this.camera.updateMatrixWorld(true);
+    } else {
+      this._glideActive = true;
+      this._glideElapsed = 0.0;
+      this._glideStartWallMs = performance.now();
+      const dist = this.camera.position.distanceTo(endPos);
+      this._glideDuration = Math.min(1.05, Math.max(0.50, 0.42 + dist * 0.032));
+      this._glideStartPos.copy(this.camera.position);
+      this._glideEndPos.copy(endPos);
+      this._glideStartQuat.copy(this.camera.quaternion);
+      this._glideEndQuat.copy(endQuat);
+      this._glideStartFov = this.camera.fov;
+      this._glideEndFov = endFov;
+    }
+
+    if (this.onPoseTransition) {
+      this.onPoseTransition({
+        endPos,
+        endQuat,
+        activeSeat: true,
+        immediate: isImmediate,
+        durationSec: isImmediate ? 0.0 : Math.max(0.55, this._glideDuration * 1.1),
+      });
+    }
+
+    this.onPianoPresetChange(null);
+  }
+
   applyExplicitFovDeg(vfovDeg) {
     this.explicitFovOverrideDeg = Number(vfovDeg);
     this.camera.fov = this.explicitFovOverrideDeg;
@@ -256,8 +322,8 @@ export class KoernerCameraController {
     let pz = this.pianoTarget.z + this.pianoRadius * sinP * Math.cos(this.pianoTheta);
 
     // Keep camera inside Koerner Hall walls & above stage deck
-    px = Math.max(-9.2, Math.min(9.2, px));
-    pz = Math.max(-18.0, Math.min(12.2, pz));
+    px = Math.max(-9.8, Math.min(9.8, px));
+    pz = Math.max(-24.0, Math.min(12.2, pz));
     const minFloorY = pz > 0.2 ? 1.12 : 0.48;
     if (py < minFloorY) py = minFloorY;
 
@@ -340,7 +406,7 @@ export class KoernerCameraController {
         this._glideActive = false;
         this.pianoRadiusGoal = Math.max(
           0.46,
-          Math.min(7.8, this.pianoRadiusGoal + e.deltaY * 0.0028)
+          Math.min(30.0, this.pianoRadiusGoal + e.deltaY * 0.0036)
         );
       },
       { passive: false }

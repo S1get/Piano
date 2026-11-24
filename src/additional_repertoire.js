@@ -1,16 +1,17 @@
 /**
  * Full-Length Concert Grand Piano Solo Repertoire for Koerner Hall
  *
- * 6 complete, concert-duration multi-voice arrangements (~2:40 – 4:15 each)
- * synchronized to the 61-key 3D action, damper lift, and multi-model Web Audio
- * Concert Grand Piano engine (Steinway D, Bösendorfer Imperial, Fazioli F308,
- * Yamaha CFX, Crystal Grand, Stein 1780):
- *   1. Ludwig van Beethoven — Für Elise, WoO 59 (~2:50)
- *   2. Silo & Steven Cranberry — Meaningful Love (~2:40)
- *   3. Shuichi Sakamoto — Drowning Love ("Chasing Kou") (~3:05)
- *   4. Frédéric Chopin — Étude Op. 25 No. 11 "Winter Wind" (~3:20)
- *   5. Ludwig van Beethoven — Moonlight Sonata, Op. 27 No. 2 I. Adagio sostenuto (~4:15)
- *   6. Franz Liszt — La Campanella, S. 141 No. 3 (~3:30)
+ * 8 complete, full-length concert-duration multi-voice editions (~3:35 – 5:35 each)
+ * synchronized to the 61-key 3D action, damper lift, HD scrolling engraved score,
+ * and multi-model Studio Salamander Concert Grand Piano engine:
+ *   1. Ludwig van Beethoven — Für Elise, WoO 59 (~3:45)
+ *   2. Ludwig van Beethoven — Moonlight Sonata, Op. 27 No. 2 I. Adagio sostenuto (~5:25)
+ *   3. Frédéric Chopin — Nocturne in E-flat Major, Op. 9 No. 2 (~4:25)
+ *   4. Franz Liszt — La Campanella, S. 141 No. 3 (~4:45)
+ *   5. Frédéric Chopin — Étude Op. 25 No. 11 "Winter Wind" (~3:50)
+ *   6. Wolfgang Amadeus Mozart — Fantasia in D Minor, K. 397 (~5:05)
+ *   7. Shuichi Sakamoto — Drowning Love ("Chasing Kou") (~3:50)
+ *   8. Silo & Steven Cranberry — Meaningful Love (~3:50)
  */
 
 const PITCH_CLASS_BASE = {
@@ -280,27 +281,25 @@ function buildFurElise() {
     s.note(b + 2.5, 0.48, "C5", v(0.58), "RH");
     b += 3.0;
 
-    // Bar 12: E dominant octave bounce
+    // Bar 12: E dominant octave bounce (authentic Urtext 3/8 barline)
     s.pedal(b, b + 2.25);
     s.note(b + 0.0, 0.95, "B4", v(0.62), "RH");
     s.note(b + 0.0, 1.1, "E2", v(0.52), "LH");
     s.note(b + 0.5, 0.85, "E3", v(0.45), "LH");
     s.note(b + 1.0, 0.46, "E4", v(0.50), "RH");
     s.note(b + 1.5, 0.46, "E5", v(0.56), "RH");
-    s.note(b + 2.0, 0.46, "E5", v(0.54), "RH");
-    s.note(b + 2.5, 0.46, "E6", v(0.58), "RH");
+    s.note(b + 2.0, 0.46, "E6", v(0.58), "RH");
+    s.note(b + 2.5, 0.46, "D#6", v(0.53), "RH");
     b += 3.0;
 
-    // Bar 13: D#5 E5 D#5 E5 D#5 leading back to A
-    s.note(b + 0.0, 0.46, "D#5", v(0.49), "RH");
-    s.note(b + 0.5, 0.46, "E5", v(0.52), "RH");
-    s.note(b + 1.0, 0.46, "D#5", v(0.50), "RH");
-    s.note(b + 1.5, 0.46, "E5", v(0.54), "RH");
-    s.note(b + 2.0, 0.46, "D#5", v(0.51), "RH");
-    s.note(b + 2.5, 0.46, "E5", v(0.55), "RH");
+    // Bar 13: E6 D#5 E5 D#5 E5 D#5 — lands cleanly on Bar 14 E5 downbeat!
+    s.note(b + 0.0, 0.46, "E6", v(0.54), "RH");
+    s.note(b + 0.5, 0.46, "D#5", v(0.49), "RH");
+    s.note(b + 1.0, 0.46, "E5", v(0.52), "RH");
+    s.note(b + 1.5, 0.46, "D#5", v(0.50), "RH");
+    s.note(b + 2.0, 0.46, "E5", v(0.54), "RH");
+    s.note(b + 2.5, 0.46, "D#5", v(0.50), "RH");
     b += 3.0;
-    s.note(b + 0.0, 0.46, "D#5", v(0.50), "RH");
-    b += 0.5;
   };
 
   // --- PART 1: Exposition A (first time + repeat) ---
@@ -342,17 +341,26 @@ function buildFurElise() {
     { lh: ["E2", "B2", "G#3", "B2", "E3", "B2"], rh: [["C5", 0.5], ["B4", 0.5], ["A4", 0.5], ["G#4", 0.5], ["B4", 0.5], ["E5", 0.5]] },
   ];
 
-  for (const bar of fMajorEpisode) {
-    s.pedal(b, b + 2.75);
-    for (let k = 0; k < 6; k++) {
-      s.note(b + k * 0.5, 0.48, bar.lh[k], k === 0 ? 0.54 : 0.39, "LH");
+  // Play the full lyrical F-major / C-major episode with classical repeat and sunlit upper ornament on pass 2
+  for (let pass = 0; pass < 2; pass++) {
+    s.setTempo(b, pass === 0 ? 114 : 118);
+    for (let bi = 0; bi < fMajorEpisode.length; bi++) {
+      const bar = fMajorEpisode[bi];
+      s.pedal(b, b + 2.75);
+      for (let k = 0; k < 6; k++) {
+        s.note(b + k * 0.5, 0.48, bar.lh[k], k === 0 ? 0.54 + pass * 0.03 : 0.39 + pass * 0.02, "LH");
+      }
+      let off = 0;
+      for (const [p, d] of bar.rh) {
+        const vNote = 0.64 + pass * 0.04;
+        s.note(b + off, d * 0.94, p, vNote, "RH");
+        if (pass === 1 && off === 0 && d >= 1.0 && noteToMidi(p) <= 77) {
+          s.note(b + off, d * 0.9, noteToMidi(p) + 12, vNote * 0.72, "RH");
+        }
+        off += d;
+      }
+      b += 3.0;
     }
-    let off = 0;
-    for (const [p, d] of bar.rh) {
-      s.note(b + off, d * 0.94, p, 0.65, "RH");
-      off += d;
-    }
-    b += 3.0;
   }
 
   // Graceful descending chromatic bridge into Return of A
@@ -388,20 +396,26 @@ function buildFurElise() {
     ["A3", "C4", "E4", "A4"],
   ];
 
-  for (let i = 0; i < stormChords.length; i++) {
-    const ch = stormChords[i];
-    const dynWave = 0.64 + 0.16 * Math.sin((i / stormChords.length) * Math.PI);
-    s.pedal(b, b + 2.75);
-    // Signature Beethoven throbbing A2 16th-note pedal ostinato in LH
-    for (let k = 0; k < 6; k++) {
-      const bassNote = i === 10 ? "E2" : "A2";
-      s.note(b + k * 0.5, 0.42, bassNote, k === 0 ? dynWave * 0.92 : dynWave * 0.72, "LH");
+  for (let rep = 0; rep < 2; rep++) {
+    s.setTempo(b, rep === 0 ? 118 : 124);
+    for (let i = 0; i < stormChords.length; i++) {
+      const ch = stormChords[i];
+      const dynWave = (rep === 0 ? 0.62 : 0.70) + 0.14 * Math.sin((i / stormChords.length) * Math.PI);
+      s.pedal(b, b + 2.75);
+      // Signature Beethoven throbbing A2 16th-note pedal ostinato in LH
+      for (let k = 0; k < 6; k++) {
+        const bassNote = i === 10 ? "E2" : "A2";
+        s.note(b + k * 0.5, 0.42, bassNote, k === 0 ? dynWave * 0.92 : dynWave * 0.72, "LH");
+      }
+      // Syncopated dramatic RH chords + upper sighing voice
+      s.chord(b + 0.0, 1.35, ch, dynWave, "RH");
+      s.note(b + 1.5, 0.9, ch[3], dynWave * 0.94, "RH");
+      if (rep === 1) {
+        s.note(b + 1.5, 0.9, noteToMidi(ch[3]) + 12, dynWave * 0.80, "RH");
+      }
+      s.note(b + 2.5, 0.5, ch[2], dynWave * 0.85, "RH");
+      b += 3.0;
     }
-    // Syncopated dramatic RH chords + upper sighing voice
-    s.chord(b + 0.0, 1.35, ch, dynWave, "RH");
-    s.note(b + 1.5, 0.9, ch[3], dynWave * 0.94, "RH");
-    s.note(b + 2.5, 0.5, ch[2], dynWave * 0.85, "RH");
-    b += 3.0;
   }
 
   // Sweeping A-Minor Triplet Arpeggio Cascades (bars 13-16 of Section D)
@@ -616,8 +630,72 @@ function buildMeaningfulLove() {
   }
 
   // --- Grand Soaring Climax Chorus (8 bars) ---
-  s.setTempo(b, 90);
+  s.setTempo(b, 89);
   playChorus(true);
+
+  // --- Intimate Nocturnal Solo Piano Reflection (8 bars): singing tenor melody + upper harp chimes ---
+  s.setTempo(b, 78);
+  const soloReflect = [
+    { ch: prog[0], rh: [[0.0, 1.5, "D5", 0.56], [1.5, 0.5, "E5", 0.52], [2.0, 1.0, "F#5", 0.58], [3.0, 1.0, "B5", 0.54]] },
+    { ch: prog[1], rh: [[0.0, 1.5, "A5", 0.58], [1.5, 0.5, "G5", 0.54], [2.0, 1.5, "F#5", 0.56], [3.5, 0.5, "D5", 0.50]] },
+    { ch: prog[2], rh: [[0.0, 1.5, "E5", 0.58], [1.5, 0.5, "F#5", 0.56], [2.0, 1.0, "A5", 0.62], [3.0, 1.0, "F#5", 0.56]] },
+    { ch: prog[3], rh: [[0.0, 2.0, "E5", 0.56], [2.0, 1.0, "C#5", 0.52], [3.0, 1.0, "D5", 0.54]] },
+  ];
+  for (let rep = 0; rep < 2; rep++) {
+    for (const sr of soloReflect) {
+      s.pedal(b, b + 3.88);
+      const seq = [0, 1, 2, 3, 4, 5, 4, 3];
+      for (let k = 0; k < 8; k++) {
+        s.note(b + k * 0.5, 0.9, sr.ch.bass[seq[k]], k === 0 ? 0.52 : 0.36 + rep * 0.03, "LH");
+      }
+      for (const [off, dur, pitch, vel] of sr.rh) {
+        const vv = vel + rep * 0.05;
+        s.note(b + off, dur, pitch, vv, "RH");
+        if (rep === 1 && off === 0) {
+          s.note(b + off, dur * 0.9, noteToMidi(pitch) - 12, vv * 0.7, "RH");
+        }
+      }
+      b += 4.0;
+    }
+  }
+
+  // --- Emotional Key-Lifted Climax Chorus (+2 semitones in C# Minor / E Major, 8 bars) ---
+  s.setTempo(b, 87);
+  for (let i = 0; i < chorusMelody.length; i++) {
+    const ch = chorusProg[i % 4];
+    s.pedal(b, b + 3.88);
+    const seq = [0, 1, 2, 3, 4, 5, 4, 3];
+    for (let k = 0; k < 8; k++) {
+      s.note(
+        b + k * 0.5,
+        0.92,
+        noteToMidi(ch.bass[seq[k]]) + 2,
+        k === 0 ? 0.72 : 0.50,
+        "LH"
+      );
+    }
+    for (const [off, dur, pitch, vel] of chorusMelody[i]) {
+      const mTop = Math.min(89, noteToMidi(pitch) + 2);
+      const vv = Math.min(0.86, vel + 0.10);
+      s.note(b + off, dur, mTop, vv, "RH");
+      s.note(b + off, dur * 0.94, mTop - 12, vv * 0.78, "RH");
+    }
+    b += 4.0;
+  }
+
+  // --- Gentle Return to Home Key B Minor (4 bars) ---
+  s.setTempo(b, 80);
+  for (let m = 0; m < 4; m++) {
+    const ch = prog[m];
+    s.pedal(b, b + 3.88);
+    for (let k = 0; k < 8; k++) {
+      const pat = [0, 1, 2, 3, 4, 3, 2, 1];
+      s.note(b + k * 0.5, 0.9, ch.bass[pat[k]], k === 0 ? 0.52 : 0.36, "LH");
+    }
+    s.note(b + 0.0, 2.0, m % 2 === 0 ? "F#5" : "D5", 0.54, "RH");
+    s.note(b + 2.0, 1.8, m % 2 === 0 ? "E5" : "B4", 0.48, "RH");
+    b += 4.0;
+  }
 
   // --- Intimate High Reprise & ppp Fading Outro (8 bars) ---
   s.setTempo(b, 78);
@@ -804,9 +882,34 @@ function buildDrowningLove() {
   }
 
   // --- Final Soaring Concert Climax (16 bars = 2 full passes) ---
-  s.setTempo(b, 122);
-  playThemeA({ octaves: true, velBoost: 0.12, drivingLH: true });
-  playThemeA({ octaves: true, velBoost: 0.15, drivingLH: true });
+  s.setTempo(b, 120);
+  playThemeA({ octaves: true, velBoost: 0.11, drivingLH: true });
+
+  // --- Second Sunlit E-Major Bridge Reprise (8 bars, sweeping broken octaves) ---
+  s.setTempo(b, 116);
+  for (let rep = 0; rep < 2; rep++) {
+    for (const br of bridgeProg) {
+      s.pedal(b, b + 3.88);
+      const seq = [0, 2, 3, 4, 5, 4, 3, 2];
+      for (let k = 0; k < 8; k++) {
+        s.note(b + k * 0.5, 0.82, br.bass[seq[k]], k === 0 ? 0.68 : 0.48, "LH");
+      }
+      for (const [off, dur, pitch, vel] of br.mel) {
+        const vv = Math.min(0.86, vel + 0.08 + rep * 0.03);
+        s.note(b + off, dur, pitch, vv, "RH");
+        s.note(b + off, dur * 0.92, noteToMidi(pitch) - 12, vv * 0.78, "RH");
+      }
+      b += 4.0;
+    }
+  }
+
+  // --- Twilight Ocean Reflection (8 bars): lyrical piano cantabile before final surge ---
+  s.setTempo(b, 106);
+  playThemeA({ octaves: false, velBoost: -0.02, drivingLH: false });
+
+  // --- Grand Final Surge (8 bars) ---
+  s.setTempo(b, 118);
+  playThemeA({ octaves: true, velBoost: 0.14, drivingLH: true });
 
   // --- Fragile Seafront Coda (8 bars) ---
   s.setTempo(b, 102);
@@ -1028,10 +1131,31 @@ function buildWinterWind() {
     b += 4.0;
   }
 
-  // --- Section 4: Heroic A Minor Recapitulation (16 bars) ---
-  s.setTempo(b, 126);
+  // --- Section 3B: Turbulent F Minor & D Minor Central Storm Episode (16 bars) ---
+  s.setTempo(b, 122);
+  const centralStorm = [
+    { top: "F6", steps: [0, 4, 7, 12, 16, 19, 24, 19], lh: [[0, 1.5, ["F1", "F2"], 0.80], [1.5, 0.5, ["C3", "F3", "Ab3"], 0.66], [2, 1.5, ["Ab1", "Ab2"], 0.78], [3.5, 0.5, ["C3", "F3", "Ab3"], 0.66]] },
+    { top: "F6", steps: [0, 5, 8, 12, 17, 20, 24, 17], lh: [[0, 1.25, ["G1", "G2"], 0.78], [1.25, 0.75, ["F1", "F2"], 0.74], [2, 1.0, ["E1", "E2"], 0.78], [3, 1.0, ["F1", "F2"], 0.78]] },
+    { top: "Ab6", steps: [0, 4, 7, 12, 16, 19, 24, 16], lh: [[0, 1.5, ["Db1", "Db2"], 0.80], [1.5, 0.5, ["Ab2", "Db3", "F3"], 0.68], [2, 1.5, ["Bb1", "Bb2"], 0.78], [3.5, 0.5, ["F2", "Bb2", "Db3"], 0.66]] },
+    { top: "G6", steps: [0, 5, 7, 12, 17, 19, 24, 12], lh: [[0, 1.5, ["C2", "C3"], 0.82], [1.5, 0.5, ["E2", "G2", "Bb2"], 0.70], [2, 1.5, ["C2", "C3"], 0.80], [3.5, 0.5, ["E2", "G2", "C3"], 0.70]] },
+    // Shift into fiery D Minor driving toward A minor return
+    { top: "A6", steps: [0, 5, 9, 12, 17, 21, 24, 17], lh: [[0, 1.5, ["D2", "D3"], 0.80], [1.5, 0.5, ["A2", "D3", "F3"], 0.66], [2, 1.5, ["F2", "F3"], 0.78], [3.5, 0.5, ["A2", "D3", "F3"], 0.66]] },
+    { top: "A6", steps: [0, 4, 8, 12, 16, 20, 24, 16], lh: [[0, 1.25, ["E2", "E3"], 0.78], [1.25, 0.75, ["D2", "D3"], 0.74], [2, 1.0, ["C#2", "C#3"], 0.78], [3, 1.0, ["D2", "D3"], 0.78]] },
+    { top: "G#6", steps: [0, 3, 6, 9, 12, 15, 18, 12], lh: [[0, 1.5, ["B1", "B2"], 0.80], [1.5, 0.5, ["F2", "B2", "D3"], 0.68], [2, 1.5, ["E1", "E2"], 0.82], [3.5, 0.5, ["G#2", "B2", "E3"], 0.70]] },
+    { top: "B6", steps: [0, 4, 7, 12, 16, 19, 24, 16], lh: [[0, 1.5, ["E1", "E2"], 0.82], [1.5, 0.5, ["G#2", "B2", "E3"], 0.70], [2, 1.0, ["D2", "D3"], 0.78], [3, 1.0, ["E2", "E3"], 0.82]] },
+  ];
+  for (let rep = 0; rep < 2; rep++) {
+    for (const cs of centralStorm) {
+      addWindBar(b, noteToMidi(cs.top), cs.steps, cs.lh, 0.74 + rep * 0.04);
+      b += 4.0;
+    }
+  }
+
+  // --- Section 4: Heroic A Minor Recapitulation (24 bars) ---
+  s.setTempo(b, 122);
   playMainStormA(0.75, 0.04);
   playMainStormA(0.78, 0.06);
+  playMainStormA(0.80, 0.07);
 
   // --- Section 5: Blazing Coda, Unison Harmonic Minor Flourish & Grand Cadence ---
   s.setTempo(b, 130);
@@ -1097,10 +1221,10 @@ function buildWinterWind() {
 
 // ============================================================================
 // 5. LUDWIG VAN BEETHOVEN — MOONLIGHT SONATA, OP. 27 NO. 2 (I. Adagio sostenuto)
-//    Complete 56-bar Adagio sostenuto in C# minor (~52 BPM) · Target ~4:15 (255s)
+//    Complete 69-bar Concert Adagio sostenuto in C# minor (~49 BPM) · Target ~5:30 (330s)
 // ============================================================================
 function buildMoonlightSonata() {
-  const s = new ScoreBuilder(53);
+  const s = new ScoreBuilder(49);
   let b = 0;
 
   const addBar = (triplets4, lhNotes, rhMel = [], pedalSplits = [[0, 3.94]], tripletVel = 0.34) => {
@@ -1166,7 +1290,7 @@ function buildMoonlightSonata() {
   addBar(
     [["G#3", "B3", "E4"], ["G#3", "B3", "E4"], ["A3", "B3", "D#4"], ["A3", "B3", "D#4"]],
     [[0.0, 1.95, ["B1", "B2"], 0.48], [2.0, 1.95, ["B1", "B2"], 0.48]],
-    [[0.0, 1.9, "G#4", 0.58], [2.0, 1.4, "F#4", 0.56], [3.5, 0.5, "B4", 0.56]],
+    [[0.0, 1.95, "G#4", 0.58], [2.0, 1.95, "F#4", 0.56]],
     [[0, 1.92], [2.0, 3.94]]
   );
   // Bar 9: E Major warm respite
@@ -1245,8 +1369,8 @@ function buildMoonlightSonata() {
     [[0, 1.92], [2.0, 3.94]]
   );
 
-  // --- PART 3: Expressive Development & Iconic G# Dominant Pedal Cascade (Bars 21-36) ---
-  s.setTempo(b, 51);
+  // --- PART 3: Expressive Development & Authentic Extended G# Dominant Pedal (Bars 21-46) ---
+  s.setTempo(b, 48);
   // Bars 21-24: F# Minor / D Major / G#7 dramatic climb
   addBar(
     [["G#3", "B3", "E4"], ["G#3", "B3", "E4"], ["A3", "C#4", "F#4"], ["A3", "C#4", "F#4"]],
@@ -1276,8 +1400,37 @@ function buildMoonlightSonata() {
     [[0, 1.92], [2.0, 3.94]],
     0.37
   );
+  // Bars 25-28: Deepening shadow in F# minor -> C# minor -> G#7 arrival
+  addBar(
+    [["A3", "C#4", "F#4"], ["A3", "C#4", "F#4"], ["B3", "D4", "G#4"], ["B3", "D4", "G#4"]],
+    [[0.0, 1.95, ["F#1", "F#2"], 0.54], [2.0, 1.95, ["E#1", "E#2"], 0.56]],
+    [[0.0, 1.9, "F#5", 0.66], [2.0, 1.9, "E#5", 0.64]],
+    [[0, 1.92], [2.0, 3.94]],
+    0.37
+  );
+  addBar(
+    [["A3", "C#4", "F#4"], ["A3", "C#4", "F#4"], ["A3", "C4", "F#4"], ["A3", "C4", "F#4"]],
+    [[0.0, 1.95, ["F#1", "F#2"], 0.54], [2.0, 1.95, ["D#1", "D#2"], 0.56]],
+    [[0.0, 1.9, "F#5", 0.68], [2.0, 1.2, "E5", 0.64], [3.2, 0.8, "D#5", 0.60]],
+    [[0, 1.92], [2.0, 3.94]],
+    0.37
+  );
+  addBar(
+    [["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"], ["G#3", "B#3", "F#4"], ["G#3", "B#3", "D#4"]],
+    [[0.0, 1.95, ["G#1", "G#2"], 0.54], [2.0, 1.95, ["G#1", "G#2"], 0.54]],
+    [[0.0, 1.9, "E5", 0.64], [2.0, 1.9, "D#5", 0.60]],
+    [[0, 1.92], [2.0, 3.94]],
+    0.36
+  );
+  addBar(
+    [["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"], ["G#3", "B#3", "D#4"], ["G#3", "B#3", "D#4"]],
+    [[0.0, 3.92, ["G#1", "G#2"], 0.52]],
+    [[0.0, 2.0, "C#5", 0.60], [2.0, 2.0, "B#4", 0.56]],
+    [[0, 1.92], [2.0, 3.94]],
+    0.35
+  );
 
-  // Bars 25-32: Iconic Beethoven G# Dominant Pedal Point Arpeggio Cascades (8 full bars!)
+  // Bars 29-42: Iconic Beethoven 14-Bar G# Dominant Pedal Point Meditation & Cascades
   addBar(
     [["G#3", "C#4", "E4"], ["G#3", "D#4", "F#4"], ["G#3", "E4", "G#4"], ["G#3", "F#4", "A4"]],
     [[0.0, 3.92, ["G#1", "G#2"], 0.52]],
@@ -1306,7 +1459,21 @@ function buildMoonlightSonata() {
     [[0, 1.92], [2.0, 3.94]],
     0.34
   );
-  // Floating whisper over G# bass descending into Recapitulation
+  // Second wave of G# pedal suspensions descending into whispered stillness
+  addBar(
+    [["G#3", "C#4", "E4"], ["G#3", "D#4", "F#4"], ["G#3", "E4", "G#4"], ["G#3", "D#4", "F#4"]],
+    [[0.0, 3.92, ["G#1", "G#2"], 0.48]],
+    [[0.0, 2.0, "E5", 0.58], [2.0, 2.0, "D#5", 0.54]],
+    [[0, 1.92], [2.0, 3.94]],
+    0.34
+  );
+  addBar(
+    [["G#3", "C#4", "E4"], ["A3", "C#4", "F#4"], ["G#3", "B#3", "D#4"], ["F#3", "A3", "C#4"]],
+    [[0.0, 3.92, ["G#1", "G#2"], 0.46]],
+    [[0.0, 2.0, "C#5", 0.54], [2.0, 2.0, "B#4", 0.50]],
+    [[0, 1.92], [2.0, 3.94]],
+    0.33
+  );
   addBar(
     [["G#3", "C#4", "E4"], ["G#3", "D#4", "F#4"], ["G#3", "C#4", "E4"], ["G#3", "B#3", "D#4"]],
     [[0.0, 3.92, ["G#1", "G#2"], 0.46]],
@@ -1322,8 +1489,8 @@ function buildMoonlightSonata() {
     0.31
   );
 
-  // --- PART 4: Full Recapitulation in C# Minor (Bars 31-48) ---
-  s.setTempo(b, 53);
+  // --- PART 4: Full Recapitulation in C# Minor (Bars 43-60) ---
+  s.setTempo(b, 49);
   addBar(
     [["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"]],
     [[0.0, 3.92, ["C#2", "C#3"], 0.46]]
@@ -1393,23 +1560,25 @@ function buildMoonlightSonata() {
     [[0, 1.92], [2.0, 3.94]]
   );
 
-  // --- PART 5: Deep-Bass Echo Coda fading to ppp (Bars 49-56) ---
-  s.setTempo(b, 50);
-  // Iconic LH echo of the dotted melody in the bass!
-  addBar(
-    [["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"]],
-    [[0.0, 2.9, ["C#2", "C#3"], 0.46], [3.0, 0.72, ["G#2"], 0.48], [3.75, 0.25, ["G#2"], 0.44]],
-    [],
-    [[0, 3.94]],
-    0.32
-  );
-  addBar(
-    [["A3", "C#4", "F#4"], ["A3", "C#4", "F#4"], ["G#3", "B#3", "D#4"], ["G#3", "B#3", "D#4"]],
-    [[0.0, 1.9, ["A2"], 0.48], [2.0, 1.9, ["G#2"], 0.46]],
-    [],
-    [[0, 1.92], [2.0, 3.94]],
-    0.31
-  );
+  // --- PART 5: Deep-Bass Echo Coda fading to ppp (Bars 61-69) ---
+  s.setTempo(b, 47);
+  // Iconic LH echo of the dotted melody in the bass (two full waves)!
+  for (let rep = 0; rep < 2; rep++) {
+    addBar(
+      [["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"]],
+      [[0.0, 2.9, ["C#2", "C#3"], 0.46 - rep * 0.03], [3.0, 0.72, ["G#2"], 0.48 - rep * 0.03], [3.75, 0.25, ["G#2"], 0.44 - rep * 0.03]],
+      [],
+      [[0, 3.94]],
+      0.32 - rep * 0.02
+    );
+    addBar(
+      [["A3", "C#4", "F#4"], ["A3", "C#4", "F#4"], ["G#3", "B#3", "D#4"], ["G#3", "B#3", "D#4"]],
+      [[0.0, 1.9, ["A2"], 0.48 - rep * 0.03], [2.0, 1.9, ["G#2"], 0.46 - rep * 0.03]],
+      [],
+      [[0, 1.92], [2.0, 3.94]],
+      0.31 - rep * 0.02
+    );
+  }
   addBar(
     [["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"], ["G#3", "C#4", "E4"]],
     [[0.0, 2.9, ["C#2", "C#3"], 0.44], [3.0, 0.72, ["G#2"], 0.45], [3.75, 0.25, ["G#2"], 0.41]],
@@ -1425,7 +1594,7 @@ function buildMoonlightSonata() {
     0.29
   );
   // Final lingering C# minor arpeggiated ascent & ppp chords
-  s.setTempo(b, 46);
+  s.setTempo(b, 43);
   addBar(
     [["G#3", "C#4", "E4"], ["C#4", "E4", "G#4"], ["E4", "G#4", "C#5"], ["G#3", "C#4", "E4"]],
     [[0.0, 3.92, ["C#1", "C#2"], 0.44]],
@@ -1637,9 +1806,39 @@ function buildLaCampanella() {
     }
   }
 
-  // --- Variation 4: Virtuoso Double-Hand Arpeggios & Leaping Bells (16 bars) ---
-  s.setTempo(b, 222);
-  playTheme16(0.76, true);
+  // --- Variation 4: Left-Hand Bell Crossover & Sparkling Arpeggios (16 bars) ---
+  s.setTempo(b, 208);
+  const crossBars = [
+    { mel: ["D#4", "D#4", "E4"], lhBell: "D#6", bass: "G#2", ch: ["B3", "D#4", "G#4"] },
+    { mel: ["D#4", "C#4", "B3"], lhBell: "D#6", bass: "G#2", ch: ["B3", "D#4", "G#4"] },
+    { mel: ["C#4", "D#4", "C#4"], lhBell: "D#6", bass: "D#2", ch: ["A#3", "C#4", "F##4"] },
+    { mel: ["B3", "A#3", "G#3"], lhBell: "D#6", bass: "G#2", ch: ["B3", "D#4", "G#4"] },
+    { mel: ["F#4", "G#4", "F#4"], lhBell: "D#6", bass: "B1", ch: ["F#3", "B3", "D#4"] },
+    { mel: ["E4", "D#4", "C#4"], lhBell: "D#6", bass: "F#2", ch: ["A#3", "C#4", "F#4"] },
+    { mel: ["D#4", "E4", "F##4"], lhBell: "D#6", bass: "D#2", ch: ["A#3", "D#4", "F##4"] },
+    { mel: ["G#4", "D#4", "B3"], lhBell: "D#6", bass: "G#2", ch: ["B3", "D#4", "G#4"] },
+  ];
+  for (let rep = 0; rep < 2; rep++) {
+    for (const xb of crossBars) {
+      s.pedal(b, b + 5.75);
+      s.note(b + 0.0, 2.2, xb.bass, 0.68, "LH");
+      s.note(b + 3.0, 2.2, xb.bass, 0.64, "LH");
+      for (let k = 0; k < 3; k++) {
+        s.note(b + k * 2.0, 1.0, xb.mel[k], 0.72, "RH");
+        s.chord(b + k * 2.0 + 0.5, 0.7, xb.ch, 0.52, "RH");
+        s.note(b + k * 2.0 + 1.0, 0.9, xb.lhBell, 0.68 + rep * 0.04, "LH");
+      }
+      b += 6.0;
+    }
+  }
+
+  // --- Variation 5: Virtuoso Double-Hand Arpeggios & Leaping Bells (16 bars) ---
+  s.setTempo(b, 218);
+  playTheme16(0.75, true);
+
+  // --- Variation 6: Bravura Octave Bells (16 bars) ---
+  s.setTempo(b, 224);
+  playTheme16(0.80, true);
 
   // --- Animato Concert Finale & Blazing G# Minor Bell Cadence (16 bars) ---
   s.setTempo(b, 232);
@@ -1689,11 +1888,11 @@ function buildLaCampanella() {
 
 // ============================================================================
 // 7. FRÉDÉRIC CHOPIN — NOCTURNE IN E-FLAT MAJOR, OP. 9 NO. 2
-//    Andante 12/8 (~132 eighth-note BPM), full A - A' - B - A'' - B' - A''' - Coda (~3:30)
+//    Authentic Concert Andante 12/8 (~110 eighth-note BPM), full A - A' - B - A'' - B' - A''' - Coda (~4:25)
 // ============================================================================
 function buildChopinNocturneOp9No2() {
   // 12/8 time: 1 bar = 12 eighth-note beats (4 dotted-quarter pulses of 3 beats each)
-  const s = new ScoreBuilder(134);
+  const s = new ScoreBuilder(110);
   let b = 0;
 
   const addNocturnePulse = (beatStart, bassNote, chord1, chord2, vel = 0.44) => {
@@ -1714,47 +1913,47 @@ function buildChopinNocturneOp9No2() {
   b = 1.0;
 
   const playSectionA = (ornamentLevel = 0, velBase = 0.56) => {
-    // Bar 1: Eb -> Eb(dim/G) -> Fm7 -> Bb7
+    // Bar 1: Authentic Chopin Op. 9 No. 2 — Eb -> G7/D -> Cm7 -> Bb7/D -> Eb/G
     addNocturnePulse(b + 0, "Eb2", ["G3", "Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.43);
-    addNocturnePulse(b + 3, "G2", ["Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.42);
-    addNocturnePulse(b + 6, "F2", ["Ab3", "C4", "Eb4"], ["Ab3", "C4", "Eb4"], 0.43);
-    addNocturnePulse(b + 9, "Bb1", ["Ab3", "D4"], ["Ab3", "D4", "F4"], 0.43);
+    addNocturnePulse(b + 3, "G2", ["F3", "B3", "D4"], ["G3", "Bb3", "Eb4"], 0.42);
+    addNocturnePulse(b + 6, "C2", ["G3", "Bb3", "Eb4"], ["G3", "C4", "Eb4"], 0.43);
+    addNocturnePulse(b + 9, "Eb2", ["G3", "Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.43);
 
     if (ornamentLevel === 0) {
       addMel(b, [
         [0, 3.0, "G5", velBase + 0.06],
         [3, 1.0, "F5", velBase], [4, 1.0, "G5", velBase + 0.02], [5, 1.0, "F5", velBase - 0.01],
-        [6, 3.0, "Eb5", velBase + 0.03],
-        [9, 2.0, "Bb4", velBase - 0.04], [11, 1.0, "G5", velBase + 0.04],
+        [6, 2.0, "Eb5", velBase + 0.03], [8, 1.0, "Bb4", velBase - 0.04],
+        [9, 3.0, "G5", velBase + 0.05],
       ]);
     } else if (ornamentLevel === 1) {
       addMel(b, [
-        [0, 2.5, "G5", velBase + 0.06], [2.5, 0.5, "A5", velBase],
+        [0, 2.5, "G5", velBase + 0.06], [2.5, 0.5, "Ab5", velBase],
         [3, 0.75, "F5", velBase], [3.75, 0.75, "G5", velBase + 0.03], [4.5, 0.75, "Ab5", velBase + 0.03], [5.25, 0.75, "F5", velBase],
-        [6, 2.5, "Eb5", velBase + 0.04], [8.5, 0.5, "D5", velBase - 0.03],
-        [9, 2.0, "Bb4", velBase - 0.04], [11, 1.0, "G5", velBase + 0.05],
+        [6, 2.0, "Eb5", velBase + 0.04], [8, 1.0, "Bb4", velBase - 0.04],
+        [9, 2.5, "G5", velBase + 0.05], [11.5, 0.5, "Bb5", velBase + 0.03],
       ]);
     } else {
       addMel(b, [
         [0, 2.2, "G5", velBase + 0.08], [2.2, 0.4, "Ab5", velBase + 0.02], [2.6, 0.4, "G5", velBase + 0.01],
         [3, 0.6, "F5", velBase + 0.02], [3.6, 0.6, "G5", velBase + 0.04], [4.2, 0.6, "Bb5", velBase + 0.06], [4.8, 0.6, "Ab5", velBase + 0.03], [5.4, 0.6, "F5", velBase],
-        [6, 2.6, "Eb5", velBase + 0.05], [8.6, 0.4, "D5", velBase - 0.02],
-        [9, 1.5, "Bb4", velBase - 0.03], [10.5, 0.5, "Eb5", velBase], [11, 1.0, "G5", velBase + 0.06],
+        [6, 2.0, "Eb5", velBase + 0.05], [8, 1.0, "Bb4", velBase - 0.03],
+        [9, 2.2, "G5", velBase + 0.06], [11.2, 0.8, "Ab5", velBase + 0.02],
       ]);
     }
     b += 12.0;
 
-    // Bar 2: Eb -> C7 -> Fm -> Bb7
-    addNocturnePulse(b + 0, "Eb2", ["G3", "Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.44);
-    addNocturnePulse(b + 3, "C2", ["G3", "Bb3", "E4"], ["G3", "Bb3", "E4"], 0.45);
-    addNocturnePulse(b + 6, "F2", ["Ab3", "C4", "F4"], ["Ab3", "C4", "F4"], 0.45);
-    addNocturnePulse(b + 9, "Bb1", ["Ab3", "D4", "F4"], ["Ab3", "D4", "F4"], 0.44);
+    // Bar 2: Ab/C -> C7 -> Fm -> Bb7 (Chopin's unmistakable rising C6 -> C5 -> G5 -> F5 -> D5 -> Eb5!)
+    addNocturnePulse(b + 0, "C2", ["Ab3", "C4", "Eb4"], ["G3", "Bb3", "E4"], 0.44);
+    addNocturnePulse(b + 3, "F2", ["Ab3", "C4", "F4"], ["Ab3", "C4", "F4"], 0.45);
+    addNocturnePulse(b + 6, "Bb1", ["Ab3", "D4", "F4"], ["Ab3", "D4", "F4"], 0.45);
+    addNocturnePulse(b + 9, "Eb2", ["G3", "Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.44);
 
     addMel(b, [
-      [0, 2.5, "C6", velBase + 0.08], [2.5, 0.5, "Bb5", velBase + 0.03],
-      [3, 2.0, "G5", velBase + 0.04], [5, 1.0, "E5", velBase],
-      [6, 2.2, "F5", velBase + 0.04], [8.2, 0.8, "Ab5", velBase + 0.05],
-      [9, 2.0, "D5", velBase], [11, 1.0, "Bb4", velBase - 0.03],
+      [0, 3.0, "C6", velBase + 0.08],
+      [3, 2.0, "C5", velBase], [5, 1.0, "G5", velBase + 0.04],
+      [6, 2.0, "F5", velBase + 0.04], [8, 1.0, "D5", velBase],
+      [9, 2.0, "Eb5", velBase + 0.03], [11, 1.0, "Bb4", velBase - 0.03],
     ]);
     b += 12.0;
 
@@ -1798,7 +1997,7 @@ function buildChopinNocturneOp9No2() {
 
   const playSectionB = (passIdx = 0) => {
     const vB = 0.58 + passIdx * 0.04;
-    s.setTempo(b, 138 + passIdx * 3);
+    s.setTempo(b, 114 + passIdx * 3);
     // Bar 1: Bb7 -> Eb -> G7 -> Cm
     addNocturnePulse(b + 0, "Bb1", ["Ab3", "D4", "F4"], ["Ab3", "D4", "F4"], 0.46);
     addNocturnePulse(b + 3, "Eb2", ["G3", "Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.46);
@@ -1839,7 +2038,7 @@ function buildChopinNocturneOp9No2() {
     b += 12.0;
 
     // Bar 4: Singing return to Eb tonic
-    s.setTempo(b, 130);
+    s.setTempo(b, 108);
     addNocturnePulse(b + 0, "Eb2", ["G3", "Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.44);
     addNocturnePulse(b + 3, "C2", ["G3", "C4", "Eb4"], ["G3", "C4", "Eb4"], 0.42);
     addNocturnePulse(b + 6, "F2", ["Ab3", "C4", "Eb4"], ["Ab3", "D4", "F4"], 0.42);
@@ -1851,56 +2050,59 @@ function buildChopinNocturneOp9No2() {
       [9, 2.0, "D5", vB - 0.04], [11, 1.0, "Bb4", vB - 0.05],
     ]);
     b += 12.0;
-    s.setTempo(b, 134);
+    s.setTempo(b, 110);
   };
 
-  // Full Nocturne Architecture: A - A' - B - A'' - B' - A''' - Coda (36 bars ~ 3:28)
+  // Full Concert Nocturne Architecture: A - A' - B - A'' - B' - A''' - Poetic Coda & Cadenza (~4:25)
   playSectionA(0, 0.54);
   playSectionA(1, 0.56);
   playSectionB(0);
   playSectionA(1, 0.58);
   playSectionB(1);
   playSectionA(2, 0.60);
+  playSectionB(1);
+  playSectionA(2, 0.58);
 
-  // --- Poetically Fading Coda & Delicate Cadenza ---
-  s.setTempo(b, 122);
-  for (let rep = 0; rep < 2; rep++) {
-    addNocturnePulse(b + 0, "Eb2", ["G3", "Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.42 - rep * 0.04);
-    addNocturnePulse(b + 3, "Ab1", ["Ab3", "C4", "F4"], ["Ab3", "C4", "F4"], 0.42 - rep * 0.04);
-    addNocturnePulse(b + 6, "Bb1", ["Ab3", "D4", "F4"], ["Ab3", "D4", "F4"], 0.40 - rep * 0.04);
-    addNocturnePulse(b + 9, "Eb2", ["G3", "Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.38 - rep * 0.04);
+  // --- Poetically Fading Coda (4 bars of con forza -> smorzando) & Delicate Cadenza ---
+  s.setTempo(b, 102);
+  for (let rep = 0; rep < 4; rep++) {
+    const fade = rep * 0.035;
+    addNocturnePulse(b + 0, "Eb2", ["G3", "Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.44 - fade);
+    addNocturnePulse(b + 3, "Ab1", ["Ab3", "C4", "F4"], ["Ab3", "C4", "F4"], 0.44 - fade);
+    addNocturnePulse(b + 6, "Bb1", ["Ab3", "D4", "F4"], ["Ab3", "D4", "F4"], 0.42 - fade);
+    addNocturnePulse(b + 9, "Eb2", ["G3", "Bb3", "Eb4"], ["G3", "Bb3", "Eb4"], 0.40 - fade);
     addMel(b, [
-      [0, 2.5, "G5", 0.58 - rep * 0.06], [2.5, 0.5, "Ab5", 0.52 - rep * 0.06],
-      [3, 2.5, "F5", 0.56 - rep * 0.06], [5.5, 0.5, "G5", 0.50 - rep * 0.06],
-      [6, 2.5, "D5", 0.52 - rep * 0.06], [8.5, 0.5, "F5", 0.48 - rep * 0.06],
-      [9, 3.0, "Eb5", 0.50 - rep * 0.06],
+      [0, 2.5, rep === 0 ? "Bb5" : "G5", 0.62 - fade * 1.4], [2.5, 0.5, "Ab5", 0.54 - fade * 1.4],
+      [3, 2.5, "F5", 0.58 - fade * 1.4], [5.5, 0.5, "G5", 0.52 - fade * 1.4],
+      [6, 2.5, "D5", 0.54 - fade * 1.4], [8.5, 0.5, "F5", 0.48 - fade * 1.4],
+      [9, 3.0, "Eb5", 0.52 - fade * 1.4],
     ]);
     b += 12.0;
   }
 
-  // Famous feathery descending chromatic cadenza over Bb7 pedal
-  s.setTempo(b, 152);
-  s.pedal(b, b + 12.0);
-  s.chord(b, 6.0, ["Bb1", "Bb2", "D3", "Ab3"], 0.44, "LH");
+  // Famous feathery descending chromatic senza-tempo cadenza over Bb7 pedal
+  s.setTempo(b, 132);
+  s.pedal(b, b + 16.0);
+  s.chord(b, 8.0, ["Bb1", "Bb2", "D3", "Ab3"], 0.44, "LH");
   const cadNotes = [
     "Bb5", "A5", "Ab5", "G5", "Gb5", "F5", "E5", "Eb5",
-    "D5", "Eb5", "F5", "G5", "Ab5", "Bb5", "C6", "Bb5",
-    "Ab5", "G5", "F5", "Eb5", "D5", "F5",
+    "D5", "Eb5", "F5", "G5", "Ab5", "Bb5", "C6", "Db6",
+    "C6", "Bb5", "Ab5", "G5", "F5", "Eb5", "D5", "Eb5", "F5", "G5", "F5", "D5",
   ];
   for (let i = 0; i < cadNotes.length; i++) {
-    const v = 0.52 - (i / cadNotes.length) * 0.16;
-    s.note(b + i * 0.52, 0.65, cadNotes[i], v, "RH");
+    const v = 0.54 - (i / cadNotes.length) * 0.18;
+    s.note(b + i * 0.52, 0.68, cadNotes[i], v, "RH");
   }
-  b += cadNotes.length * 0.52 + 0.8;
+  b += cadNotes.length * 0.52 + 1.0;
 
   // Hushed final Eb major chords (pp)
-  s.setTempo(b, 92);
-  s.pedal(b, b + 12.0);
-  s.chord(b + 0.0, 4.2, ["Eb2", "Bb2", "G3"], 0.36, "LH");
-  s.chord(b + 0.0, 4.2, ["Bb4", "Eb5", "G5"], 0.42, "RH");
-  s.chord(b + 4.5, 6.8, ["Eb2", "Bb2", "Eb3"], 0.32, "LH");
-  s.chord(b + 4.5, 6.8, ["G4", "Bb4", "Eb5"], 0.36, "RH");
-  b += 11.8;
+  s.setTempo(b, 78);
+  s.pedal(b, b + 14.0);
+  s.chord(b + 0.0, 4.6, ["Eb2", "Bb2", "G3"], 0.36, "LH");
+  s.chord(b + 0.0, 4.6, ["Bb4", "Eb5", "G5"], 0.42, "RH");
+  s.chord(b + 5.0, 7.6, ["Eb2", "Bb2", "Eb3"], 0.32, "LH");
+  s.chord(b + 5.0, 7.6, ["G4", "Bb4", "Eb5"], 0.36, "RH");
+  b += 13.0;
 
   return s.build({
     id: "chopin_nocturne_op9_no2",
@@ -1923,10 +2125,10 @@ function buildChopinNocturneOp9No2() {
 //    Andante arpeggios -> Adagio tragic recitative -> Presto cadenzas -> Allegretto D major (~3:20)
 // ============================================================================
 function buildMozartFantasiaDMinor() {
-  const s = new ScoreBuilder(72);
+  const s = new ScoreBuilder(64);
   let b = 0;
 
-  // --- PART 1: Andante — Mysterious Rolling D Minor Arpeggios (11 bars) ---
+  // --- PART 1: Andante — Mysterious Rolling D Minor Arpeggios (14 bars) ---
   const andanteChords = [
     ["D3", "F3", "A3", "D4", "A3", "F3"],
     ["D3", "F3", "A3", "D4", "A3", "F3"],
@@ -1936,7 +2138,10 @@ function buildMozartFantasiaDMinor() {
     ["Bb2", "D3", "G3", "Bb3", "G3", "D3"],
     ["A2", "C#3", "E3", "G3", "E3", "C#3"],
     ["D3", "F3", "A3", "D4", "A3", "F3"],
+    ["C3", "Eb3", "G3", "C4", "G3", "Eb3"],
+    ["Bb2", "D3", "F3", "Bb3", "F3", "D3"],
     ["G2", "Bb2", "D3", "G3", "D3", "Bb2"],
+    ["G#2", "B2", "D3", "F3", "D3", "B2"],
     ["A2", "D3", "F3", "A3", "F3", "D3"],
     ["A2", "C#3", "E3", "A3", "E3", "C#3"],
   ];
@@ -1962,7 +2167,7 @@ function buildMozartFantasiaDMinor() {
 
   // --- PART 2: Adagio — Tragic Sighing D Minor Theme & Dramatic Outbursts ---
   const playAdagioTheme = (intense = false) => {
-    s.setTempo(b, intense ? 62 : 58);
+    s.setTempo(b, intense ? 55 : 52);
     const vM = intense ? 0.62 : 0.54;
     const phrases = [
       // Phrase 1: famous sighing D minor descent
@@ -2058,11 +2263,31 @@ function buildMozartFantasiaDMinor() {
   }
   b += cadenza1.length * 0.26 + 0.8;
 
+  // --- Adagio Development in G Minor & C Minor (8 bars of weeping recitative) ---
+  s.setTempo(b, 54);
+  const devRecit = [
+    { lh: [[0, 1.8, ["G1", "G2", "Bb2", "D3"], 0.52], [2, 1.8, ["D2", "F#2", "A2", "C3"], 0.50]], rh: [[0, 1.5, "Bb5", 0.66], [1.5, 0.5, "A5", 0.62], [2, 1.2, "G5", 0.62], [3.2, 0.8, "F#5", 0.58]] },
+    { lh: [[0, 1.8, ["G1", "G2", "Bb2", "D3"], 0.52], [2, 1.8, ["C2", "Eb2", "G2", "C3"], 0.54]], rh: [[0, 1.5, "G5", 0.64], [1.5, 0.5, "A5", 0.62], [2, 1.5, "Bb5", 0.68], [3.5, 0.5, "G5", 0.62]] },
+    { lh: [[0, 1.8, ["F2", "Ab2", "C3"], 0.54], [2, 1.8, ["G1", "G2", "B2", "D3"], 0.54]], rh: [[0, 1.5, "Ab5", 0.68], [1.5, 0.5, "G5", 0.64], [2, 1.2, "F5", 0.64], [3.2, 0.8, "D5", 0.58]] },
+    { lh: [[0, 1.8, ["C2", "G2", "Eb3"], 0.52], [2, 1.8, ["C#2", "G2", "Bb2", "E3"], 0.56]], rh: [[0, 1.5, "Eb5", 0.62], [1.5, 0.5, "F5", 0.62], [2, 1.5, "G5", 0.68], [3.5, 0.5, "E5", 0.64]] },
+    { lh: [[0, 1.8, ["D2", "F2", "A2", "D3"], 0.54], [2, 1.8, ["Bb1", "Bb2", "D3", "G3"], 0.54]], rh: [[0, 1.5, "F5", 0.66], [1.5, 0.5, "E5", 0.62], [2, 1.5, "D5", 0.64], [3.5, 0.5, "Bb4", 0.58]] },
+    { lh: [[0, 1.8, ["A1", "A2", "E3"], 0.54], [2, 1.8, ["G#1", "G#2", "B2", "F3"], 0.56]], rh: [[0, 1.5, "A4", 0.60], [1.5, 0.5, "D5", 0.64], [2, 1.5, "F5", 0.68], [3.5, 0.5, "D5", 0.62]] },
+    { lh: [[0, 3.6, ["A1", "A2", "E3", "G3"], 0.58]], rh: [[0, 2.0, "E5", 0.66], [2, 1.8, "C#5", 0.60]] },
+    { lh: [[0, 3.6, ["A1", "A2", "C#3", "E3"], 0.50]], rh: [[0, 3.2, "A4", 0.54]] },
+  ];
+  for (const dr of devRecit) {
+    s.pedal(b, b + 1.88);
+    s.pedal(b + 2.0, b + 3.88);
+    for (const [off, dur, notes, vel] of dr.lh) s.chord(b + off, dur, notes, vel, "LH");
+    for (const [off, dur, pitch, vel] of dr.rh) s.note(b + off, dur, pitch, vel, "RH");
+    b += 4.0;
+  }
+
   // --- Return of Adagio (deeper emotional weight) ---
   playAdagioTheme(true);
 
   // --- Presto Cadenza 2 leading from darkness into radiant D Major ---
-  s.setTempo(b, 152);
+  s.setTempo(b, 144);
   const cadenza2 = [
     "D4", "F#4", "A4", "C5", "D5", "E5", "F#5", "G5", "A5", "B5",
     "C#6", "D6", "C#6", "B5", "A5", "G5", "F#5", "E5", "D5", "C#5",
@@ -2075,8 +2300,8 @@ function buildMozartFantasiaDMinor() {
   }
   b += cadenza2.length * 0.28 + 1.0;
 
-  // --- PART 3: Allegretto in D Major — Sunlit Classical Resolution (20 bars) ---
-  s.setTempo(b, 108);
+  // --- PART 3: Allegretto in D Major — Sunlit Classical Resolution (A - A' - B - Cadenza - A'' - Coda) ---
+  s.setTempo(b, 102);
   const playAllegrettoA = (bright = false) => {
     const vA = bright ? 0.64 : 0.56;
     const bars = [
@@ -2105,8 +2330,44 @@ function buildMozartFantasiaDMinor() {
   playAllegrettoA(false);
   playAllegrettoA(true);
 
+  // Contrasting Allegretto B-section in A major -> G major -> D major (8 bars)
+  const allegrettoB = [
+    { lh: ["A2", "E3", "C#3", "E3"], rh: [[0, 1.0, "E5", 0.60], [1, 0.5, "F#5", 0.58], [1.5, 0.5, "G#5", 0.62], [2, 1.0, "A5", 0.66], [3, 1.0, "E5", 0.58]] },
+    { lh: ["E2", "B2", "G#2", "B2"], rh: [[0, 1.0, "D5", 0.58], [1, 0.5, "E5", 0.58], [1.5, 0.5, "F#5", 0.62], [2, 1.0, "G#5", 0.64], [3, 1.0, "E5", 0.58]] },
+    { lh: ["A2", "E3", "C#3", "E3"], rh: [[0, 0.5, "A5", 0.64], [0.5, 0.5, "G#5", 0.60], [1, 0.5, "F#5", 0.58], [1.5, 0.5, "E5", 0.58], [2, 1.0, "C#5", 0.60], [3, 1.0, "A4", 0.56]] },
+    { lh: ["E2", "B2", "D3", "B2"], rh: [[0, 1.0, "B4", 0.58], [1, 1.0, "D5", 0.60], [2, 1.5, "C#5", 0.62], [3.5, 0.5, "E5", 0.58]] },
+    { lh: ["G2", "D3", "B2", "D3"], rh: [[0, 1.0, "G5", 0.64], [1, 0.5, "F#5", 0.60], [1.5, 0.5, "G5", 0.62], [2, 1.0, "B5", 0.68], [3, 1.0, "G5", 0.62]] },
+    { lh: ["D2", "A2", "F#2", "A2"], rh: [[0, 1.0, "F#5", 0.62], [1, 0.5, "E5", 0.58], [1.5, 0.5, "F#5", 0.62], [2, 1.0, "A5", 0.66], [3, 1.0, "F#5", 0.60]] },
+    { lh: ["E2", "B2", "G2", "B2"], rh: [[0, 1.0, "E5", 0.60], [1, 0.5, "F#5", 0.60], [1.5, 0.5, "G5", 0.64], [2, 1.0, "E5", 0.62], [3, 1.0, "C#5", 0.58]] },
+    { lh: ["A2", "E3", "G3", "E3"], rh: [[0, 1.5, "E5", 0.62], [1.5, 0.5, "D5", 0.58], [2, 1.8, "C#5", 0.60]] },
+  ];
+  for (const bar of allegrettoB) {
+    s.pedal(b, b + 1.9);
+    s.pedal(b + 2.0, b + 3.9);
+    for (let k = 0; k < 4; k++) s.note(b + k, 0.85, bar.lh[k], 0.44 + (k === 0 ? 0.06 : 0), "LH");
+    for (const [off, dur, pitch, vel] of bar.rh) s.note(b + off, dur, pitch, vel, "RH");
+    b += 4.0;
+  }
+
+  // Joyful D Major Classical Cadenza & Final Allegretto Reprise
+  s.setTempo(b, 146);
+  const cadJoy = [
+    "A4", "B4", "C#5", "D5", "E5", "F#5", "G5", "A5",
+    "B5", "C#6", "D6", "B5", "G5", "E5", "C#5", "A4",
+    "D5", "F#5", "A5", "G5", "F#5", "E5", "D5", "C#5",
+  ];
+  s.pedal(b, b + 6.5);
+  s.chord(b, 3.0, ["A1", "A2", "E3", "G3"], 0.52, "LH");
+  for (let i = 0; i < cadJoy.length; i++) {
+    s.note(b + i * 0.25, 0.30, cadJoy[i], 0.54 + Math.sin((i / cadJoy.length) * Math.PI) * 0.16, "RH");
+  }
+  b += cadJoy.length * 0.25 + 0.6;
+
+  s.setTempo(b, 104);
+  playAllegrettoA(true);
+
   // Sparkling D Major Closing Cadence
-  s.setTempo(b, 98);
+  s.setTempo(b, 94);
   s.pedal(b, b + 8.0);
   s.chord(b + 0.0, 1.5, ["G2", "B2", "D3"], 0.62, "LH");
   s.chord(b + 0.0, 1.5, ["G4", "B4", "D5", "G5"], 0.66, "RH");
@@ -2132,6 +2393,939 @@ function buildMozartFantasiaDMinor() {
   });
 }
 
+// ============================================================================
+// 9. JOHANN SEBASTIAN BACH — PRELUDE IN C MAJOR, BWV 846 (WTC BOOK I) (~3:25)
+//    Complete authentic 35-bar chord progression + luminous concert reprise arch
+// ============================================================================
+function buildBachPreludeBWV846() {
+  const s = new ScoreBuilder(66);
+  let b = 0;
+
+  // Authentic complete 35-measure chord table of J. S. Bach's BWV 846 (5 voices per bar)
+  const WTC_BARS = [
+    ["C4", "E4", "G4", "C5", "E5"],   // 1  C
+    ["C4", "D4", "A4", "D5", "F5"],   // 2  Dm7/C
+    ["B3", "D4", "G4", "D5", "F5"],   // 3  G7/B
+    ["C4", "E4", "G4", "C5", "E5"],   // 4  C
+    ["C4", "E4", "A4", "E5", "A5"],   // 5  Am/C
+    ["C4", "D4", "F#4", "A4", "D5"],  // 6  D7/C
+    ["B3", "D4", "G4", "D5", "G5"],   // 7  G/B
+    ["B3", "C4", "E4", "G4", "C5"],   // 8  Cmaj7/B
+    ["A3", "C4", "E4", "G4", "C5"],   // 9  Am7
+    ["D3", "A3", "D4", "F#4", "C5"],  // 10 D7
+    ["G3", "B3", "D4", "G4", "B4"],   // 11 G
+    ["G3", "Bb3", "E4", "G4", "C#5"], // 12 C#dim7/G
+    ["F3", "A3", "D4", "A4", "D5"],   // 13 Dm/F
+    ["F3", "Ab3", "D4", "F4", "B4"],  // 14 Bdim7/F
+    ["E3", "G3", "C4", "G4", "C5"],   // 15 C/E
+    ["E3", "F3", "A3", "C4", "F4"],   // 16 Fmaj7/E
+    ["D3", "F3", "A3", "C4", "F4"],   // 17 Dm7
+    ["G2", "D3", "G3", "B3", "F4"],   // 18 G7
+    ["C3", "E3", "G3", "C4", "E4"],   // 19 C
+    ["C3", "G3", "Bb3", "C4", "E4"],  // 20 C7
+    ["F2", "F3", "A3", "C4", "E4"],   // 21 Fmaj7
+    ["F#2", "C3", "A3", "C4", "Eb4"], // 22 F#dim7
+    ["Ab2", "F3", "B3", "C4", "D4"],  // 23 Abdim / G7b9
+    ["G2", "F3", "G3", "B3", "D4"],   // 24 G7
+    ["G2", "E3", "G3", "C4", "E4"],   // 25 C/G
+    ["G2", "D3", "G3", "C4", "F4"],   // 26 G7sus4
+    ["G2", "D3", "G3", "B3", "F4"],   // 27 G7
+    ["G2", "Eb3", "A3", "C4", "F#4"], // 28 F#dim7/G
+    ["G2", "E3", "G3", "C4", "G4"],   // 29 C/G
+    ["G2", "D3", "G3", "C4", "F4"],   // 30 G7sus4
+    ["G2", "D3", "G3", "B3", "F4"],   // 31 G7
+    ["C2", "C3", "G3", "Bb3", "E4"],  // 32 C7/C
+    ["C2", "C3", "F3", "A3", "C4"],   // 33 F/C
+  ];
+
+  const playArpBar = (notes, velScale = 1.0, pedalAmt = 1.92) => {
+    const [n0, n1, n2, n3, n4] = notes;
+    for (let half = 0; half < 2; half++) {
+      const hb = b + half * 2.0;
+      s.pedal(hb, hb + pedalAmt);
+      s.note(hb + 0.0, 1.92, n0, 0.56 * velScale, "LH");
+      s.note(hb + 0.25, 1.65, n1, 0.50 * velScale, "LH");
+      s.note(hb + 0.50, 0.50, n2, 0.52 * velScale, "RH");
+      s.note(hb + 0.75, 0.50, n3, 0.55 * velScale, "RH");
+      s.note(hb + 1.00, 0.52, n4, 0.60 * velScale, "RH");
+      s.note(hb + 1.25, 0.45, n2, 0.48 * velScale, "RH");
+      s.note(hb + 1.50, 0.45, n3, 0.51 * velScale, "RH");
+      s.note(hb + 1.75, 0.42, n4, 0.56 * velScale, "RH");
+    }
+    b += 4.0;
+  };
+
+  // First Poetic Exposition (Bars 1–19, crystalline Baroque intimacy)
+  s.setTempo(b, 68);
+  for (let i = 0; i < 19; i++) {
+    const dyn = 0.88 + Math.sin((i / 18) * Math.PI) * 0.16;
+    playArpBar(WTC_BARS[i], dyn, 1.88);
+  }
+
+  // Expressive Concert Reprise of Bars 1–19 (Warmer singing voice, subtle rubato)
+  s.setTempo(b, 64);
+  for (let i = 0; i < 19; i++) {
+    const dyn = 0.94 + Math.sin((i / 18) * Math.PI) * 0.20;
+    if (i === 11) s.setTempo(b, 62);
+    if (i === 15) s.setTempo(b, 65);
+    playArpBar(WTC_BARS[i], dyn, 1.94);
+  }
+
+  // Full Harmonic Development & Dominant Pedal Point (Bars 20–33)
+  s.setTempo(b, 63);
+  for (let i = 19; i < WTC_BARS.length; i++) {
+    const progress = (i - 19) / (WTC_BARS.length - 19);
+    const dyn = 0.96 + Math.sin(progress * Math.PI) * 0.22;
+    if (i === 24) s.setTempo(b, 60);
+    if (i === 28) s.setTempo(b, 64);
+    if (i === 31) s.setTempo(b, 58);
+    playArpBar(WTC_BARS[i], dyn, 1.96);
+  }
+
+  // Bar 34: Authentic flowing G7/C flourish over deep C pedal
+  s.setTempo(b, 54);
+  s.pedal(b, b + 3.95);
+  s.chord(b, 3.95, ["C2", "C3"], 0.64, "LH");
+  const bar34 = ["G3", "B3", "D4", "F4", "D4", "B3", "D4", "B3", "G3", "B3", "D4", "F4", "E4", "D4"];
+  for (let k = 0; k < bar34.length; k++) {
+    s.note(b + 0.5 + k * 0.25, 0.42, bar34[k], 0.54 + (k / bar34.length) * 0.08, "RH");
+  }
+  b += 4.0;
+
+  // Bar 35: Final sustained C Major cathedral chord (poetic fermata)
+  s.setTempo(b, 46);
+  s.pedal(b, b + 7.5);
+  s.chord(b, 7.2, ["C2", "C3"], 0.66, "LH", 0.06);
+  s.chord(b + 0.14, 7.0, ["E4", "G4", "C5", "E5"], 0.64, "RH", 0.07);
+  b += 7.8;
+
+  return s.build({
+    id: "bach_prelude_c_major_bwv846",
+    code: "BACH-846",
+    composer: "Johann Sebastian Bach (1685–1750)",
+    title: "Prelude in C Major, BWV 846 (WTC Book I)",
+    instrument: "Concert Grand Piano · Koerner Hall Acoustic Engine",
+    license: "Public Domain Composition",
+    tuningA4: 440.0,
+    year: "1722 · The Well-Tempered Clavier, Book I",
+    keySignature: "C Major · 4/4",
+    bpm: 66,
+    historicalNote:
+      "Complete 35-bar harmonic architecture of Bach's Prelude in C Major, BWV 846 — pure Baroque equilibrium where every arpeggio unfolds like stained glass in a cathedral.",
+  });
+}
+
+// ============================================================================
+// 10. CLAUDE DEBUSSY — CLAIR DE LUNE (SUITE BERGAMASQUE) (~4:30)
+//     D♭ Major · 9/8 — Andante très expressif → Tempo rubato → Un poco mosso → Calmato
+// ============================================================================
+function buildDebussyClairDeLune() {
+  const s = new ScoreBuilder(114); // 1 beat = 1 eighth note in 9/8 (3 dotted quarters per bar)
+  let b = 0;
+
+  // Section A: Andante très expressif (Hushed floating thirds & fifths in D♭ major)
+  const playOpeningTheme = (ornamented = false) => {
+    const bars = [
+      // Bar 1-2: F5–Db5–C5–Db5–C5 sigh
+      { lh: ["Db3", "Ab3"], rh: [[2, 4, ["F5", "Ab5"], 0.44], [6, 3, ["Db5", "F5"], 0.42]] },
+      { lh: ["F2", "F3", "C4"], rh: [[0, 3, ["C5", "Eb5"], 0.46], [3, 2, ["Db5", "F5"], 0.48], [5, 1, ["C5", "Eb5"], 0.42], [6, 3, ["Bb4", "Db5"], 0.40]] },
+      { lh: ["Gb2", "Db3", "Bb3"], rh: [[0, 3, ["C5", "Eb5"], 0.44], [3, 2, ["Bb4", "Db5"], 0.42], [5, 1, ["C5", "Eb5"], 0.40], [6, 3, ["Ab4", "C5"], 0.38]] },
+      { lh: ["F2", "C3", "Ab3"], rh: [[0, 3, ["Bb4", "Db5"], 0.42], [3, 2, ["Ab4", "C5"], 0.40], [5, 1, ["Bb4", "Db5"], 0.39], [6, 3, ["Gb4", "Bb4"], 0.37]] },
+      { lh: ["Eb2", "Bb2", "Gb3"], rh: [[0, 4, ["Ab4", "C5"], 0.43], [4, 2, ["Gb4", "Bb4"], 0.41], [6, 3, ["F4", "Ab4"], 0.38]] },
+      { lh: ["Ab2", "Eb3", "C4"], rh: [[0, 3, ["Gb4", "Bb4"], 0.44], [3, 3, ["F4", "Ab4"], 0.42], [6, 3, ["Eb4", "Gb4"], 0.40]] },
+      { lh: ["Db2", "Ab2", "F3"], rh: [[0, 6, ["F4", "Ab4", "Db5"], 0.46], [6, 3, ["Ab4", "Db5", "F5"], 0.48]] },
+      { lh: ["Ab2", "Gb3", "C4"], rh: [[0, 5, ["Gb4", "Bb4", "Eb5"], 0.50], [5, 4, ["Ab4", "C5", "F5"], 0.46]] },
+    ];
+    for (let i = 0; i < bars.length; i++) {
+      const bar = bars[i];
+      s.pedal(b, b + 8.85);
+      s.chord(b, 8.6, bar.lh, ornamented ? 0.44 : 0.38, "LH", 0.18);
+      for (const [off, dur, notes, vel] of bar.rh) {
+        const chordNotes = ornamented ? [...notes, notes[notes.length - 1]] : notes;
+        s.chord(b + off, dur, chordNotes.slice(0, notes.length), vel + (ornamented ? 0.06 : 0), "RH", 0.08);
+        if (ornamented && off === 0) {
+          s.note(b + 1.5, 2.5, bar.lh[bar.lh.length - 1], 0.34, "LH");
+        }
+      }
+      b += 9.0;
+    }
+  };
+
+  s.setTempo(b, 108);
+  playOpeningTheme(false);
+
+  // Expressive Singing Middle Phrase (High crystalline octave melody over moonlit chords)
+  s.setTempo(b, 114);
+  const middleBars = [
+    { lh: ["Db3", "Ab3", "F4"], mel: [[0, 3, "F5"], [3, 3, "Ab5"], [6, 3, "Db6"]] },
+    { lh: ["C3", "Ab3", "Eb4"], mel: [[0, 4, "C6"], [4, 2, "Bb5"], [6, 3, "Ab5"]] },
+    { lh: ["Bb2", "F3", "Db4"], mel: [[0, 3, "Bb5"], [3, 3, "Ab5"], [6, 3, "F5"]] },
+    { lh: ["Gb2", "Db3", "Bb3"], mel: [[0, 4, "Gb5"], [4, 2, "F5"], [6, 3, "Eb5"]] },
+    { lh: ["F2", "C3", "Ab3"], mel: [[0, 3, "F5"], [3, 3, "Eb5"], [6, 3, "Db5"]] },
+    { lh: ["Eb2", "Bb2", "Gb3"], mel: [[0, 5, "Eb5"], [5, 4, "C5"]] },
+    { lh: ["Ab2", "Eb3", "C4"], mel: [[0, 6, "Db5"], [6, 3, "Eb5"]] },
+    { lh: ["Db2", "Ab2", "F3"], mel: [[0, 9, "F5"]] },
+  ];
+  for (const bar of middleBars) {
+    s.pedal(b, b + 8.9);
+    s.chord(b, 8.6, bar.lh, 0.44, "LH", 0.16);
+    for (const [off, dur, pitch] of bar.mel) {
+      s.note(b + off, dur + 0.4, pitch, 0.58, "RH");
+    }
+    b += 9.0;
+  }
+
+  // Section B: Tempo rubato (Shimmering Debussy liquid arpeggio waves in 9/8!)
+  s.setTempo(b, 134);
+  const rubatoWaves = [
+    { bass: "Db2", arp: ["Ab2", "Db3", "F3", "Ab3", "Db4", "F4", "Ab4", "F4", "Db4"], rh: [[0, 6, ["Ab4", "F5"]], [6, 3, ["Gb4", "Eb5"]]] },
+    { bass: "Db2", arp: ["Ab2", "Db3", "F3", "Ab3", "Db4", "F4", "Ab4", "F4", "Db4"], rh: [[0, 5, ["F4", "Db5"]], [5, 4, ["Ab4", "F5"]]] },
+    { bass: "Eb2", arp: ["Bb2", "Eb3", "Gb3", "Bb3", "Eb4", "Gb4", "Bb4", "Gb4", "Eb4"], rh: [[0, 6, ["Bb4", "Gb5"]], [6, 3, ["Ab4", "F5"]]] },
+    { bass: "Ab2", arp: ["Eb3", "Ab3", "C4", "Eb4", "Ab4", "C5", "Eb5", "C5", "Ab4"], rh: [[0, 5, ["Gb4", "Eb5"]], [5, 4, ["F4", "Db5"]]] },
+    { bass: "Gb2", arp: ["Db3", "Gb3", "Bb3", "Db4", "Gb4", "Bb4", "Db5", "Bb4", "Gb4"], rh: [[0, 6, ["Bb4", "Gb5"]], [6, 3, ["Db5", "Ab5"]]] },
+    { bass: "F2", arp: ["C3", "F3", "Ab3", "C4", "F4", "Ab4", "C5", "Ab4", "F4"], rh: [[0, 5, ["C5", "Ab5"]], [5, 4, ["Bb4", "Gb5"]]] },
+    { bass: "Eb2", arp: ["Bb2", "Eb3", "Gb3", "Bb3", "Eb4", "Gb4", "Bb4", "Gb4", "Eb4"], rh: [[0, 6, ["Ab4", "F5"]], [6, 3, ["Gb4", "Eb5"]]] },
+    { bass: "Ab2", arp: ["Eb3", "Ab3", "C4", "Eb4", "Gb4", "C5", "Eb5", "C5", "Gb4"], rh: [[0, 9, ["Ab4", "Eb5", "Ab5"]]] },
+  ];
+
+  // Play Rubato Waves twice: first tender, second swelling into Un poco mosso radiant climax
+  for (let pass = 0; pass < 2; pass++) {
+    s.setTempo(b, pass === 0 ? 132 : 146);
+    for (let i = 0; i < rubatoWaves.length; i++) {
+      const w = rubatoWaves[i];
+      const vBoost = pass === 1 ? 0.14 : 0.0;
+      s.pedal(b, b + 8.9);
+      s.note(b, 8.8, w.bass, 0.50 + vBoost, "LH");
+      for (let k = 0; k < 9; k++) {
+        s.note(b + k, 1.3, w.arp[k], 0.36 + Math.sin((k / 8) * Math.PI) * 0.10 + vBoost * 0.6, "LH");
+      }
+      for (const [off, dur, notes] of w.rh) {
+        s.chord(b + off, dur + 0.3, notes, 0.56 + vBoost, "RH", 0.06);
+        if (pass === 1 && off === 0) {
+          // Luminous octave bloom at climax
+          s.note(b + off, dur, notes[notes.length - 1], 0.66, "RH");
+        }
+      }
+      b += 9.0;
+    }
+  }
+
+  // En animant — Crystalline E Major / C♯ Minor Shimmer Bridge
+  s.setTempo(b, 138);
+  const shimmerBridge = [
+    { bass: "C#2", arp: ["G#2", "C#3", "E3", "G#3", "C#4", "E4", "G#4", "E4", "C#4"], mel: "G#5" },
+    { bass: "F#2", arp: ["C#3", "F#3", "A3", "C#4", "F#4", "A4", "C#5", "A4", "F#4"], mel: "A5" },
+    { bass: "B2", arp: ["F#3", "B3", "D#4", "F#4", "B4", "D#5", "F#5", "D#5", "B4"], mel: "B5" },
+    { bass: "Ab2", arp: ["Eb3", "Ab3", "C4", "Eb4", "Gb4", "C5", "Eb5", "C5", "Gb4"], mel: "Ab5" },
+  ];
+  for (const sh of shimmerBridge) {
+    s.pedal(b, b + 8.9);
+    s.note(b, 8.8, sh.bass, 0.54, "LH");
+    for (let k = 0; k < 9; k++) {
+      s.note(b + k, 1.4, sh.arp[k], 0.42 + Math.sin((k / 8) * Math.PI) * 0.09, "LH");
+    }
+    s.note(b + 0.0, 6.0, sh.mel, 0.64, "RH");
+    s.note(b + 6.0, 3.0, sh.arp[6], 0.52, "RH");
+    b += 9.0;
+  }
+
+  // Section A': Calmato — Moonlit Reprise of Opening Theme
+  s.setTempo(b, 102);
+  playOpeningTheme(true);
+
+  // Coda: Morendo — Dissolving Db Major9 Arpeggio into Starlight
+  s.setTempo(b, 88);
+  const codaArps = [
+    ["Db2", "Ab2", "Db3", "F3", "Ab3", "Db4", "F4", "Ab4", "Db5"],
+    ["Gb2", "Db3", "Gb3", "Bb3", "Db4", "Gb4", "Bb4", "Db5", "F5"],
+    ["Db2", "Ab2", "Db3", "F3", "Ab3", "Db4", "F4", "Ab4", "F5"],
+  ];
+  for (let c = 0; c < codaArps.length; c++) {
+    s.pedal(b, b + 9.2);
+    const seq = codaArps[c];
+    for (let k = 0; k < seq.length; k++) {
+      s.note(b + k, 4.5, seq[k], 0.42 - c * 0.05 + (k === seq.length - 1 ? 0.05 : 0), k < 4 ? "LH" : "RH");
+    }
+    b += 9.0;
+  }
+  s.setTempo(b, 76);
+  s.pedal(b, b + 11.0);
+  s.chord(b, 10.5, ["Db2", "Ab2", "Db3", "F3"], 0.36, "LH", 0.25);
+  s.chord(b + 1.0, 9.5, ["Ab4", "Db5", "F5", "Ab5"], 0.34, "RH", 0.30);
+  b += 11.2;
+
+  return s.build({
+    id: "debussy_clair_de_lune",
+    code: "DEB-CLAIR",
+    composer: "Claude Debussy (1862–1918)",
+    title: "Clair de Lune (Suite bergamasque)",
+    instrument: "Concert Grand Piano · Koerner Hall Acoustic Engine",
+    license: "Public Domain Composition",
+    tuningA4: 440.0,
+    year: "1890 / 1905 · French Impressionism",
+    keySignature: "D♭ Major · 9/8",
+    bpm: 114,
+    historicalNote:
+      "Complete Impressionist realization of Claude Debussy's Clair de Lune — floating from hushed moonlit chords into liquid 9/8 rubato arpeggio waves and a luminous starlit coda.",
+  });
+}
+
+// ============================================================================
+// 11. SERGEI RACHMANINOFF — PRELUDE IN C♯ MINOR, OP. 3 NO. 2 (~3:55)
+//     Lento Kremlin Bells → Agitato Chromatic Storm → Tempo Primo fff → ppp Fade
+// ============================================================================
+function buildRachmaninoffPreludeCSharpMinor() {
+  const s = new ScoreBuilder(54);
+  let b = 0;
+
+  // Section A: Lento — Iconic 3-note Kremlin Bell Motif (A–G#–C#) & solemn chords
+  const playBells = (grand = false) => {
+    const vBass = grand ? 0.88 : 0.72;
+    const vChord = grand ? 0.82 : 0.56;
+    const phrases = [
+      // Motif 1: A - G# - C# bell + dark C#m chords
+      {
+        bell: ["A2", "G#2", "C#2"],
+        chords: [
+          { lh: ["C#2", "C#3"], rh: ["G#3", "C#4", "E4", "G#4"] },
+          { lh: ["F#2", "C#3"], rh: ["A3", "C#4", "F#4", "A4"] },
+          { lh: ["G#2", "D#3"], rh: ["G#3", "B#3", "D#4", "G#4"] },
+          { lh: ["C#2", "G#2"], rh: ["G#3", "C#4", "E4", "G#4"] },
+        ],
+      },
+      // Motif 2: Rising lament to A major / F# minor
+      {
+        bell: ["A2", "G#2", "C#2"],
+        chords: [
+          { lh: ["E2", "B2"], rh: ["G#3", "B3", "E4", "G#4"] },
+          { lh: ["A2", "E3"], rh: ["A3", "C#4", "E4", "A4"] },
+          { lh: ["D#2", "A2"], rh: ["F#3", "B#3", "D#4", "F#4"] },
+          { lh: ["G#2", "D#3"], rh: ["G#3", "C#4", "E4", "G#4"] },
+        ],
+      },
+      // Motif 3: Descending chromatic funeral bells
+      {
+        bell: ["E2", "D#2", "C#2"],
+        chords: [
+          { lh: ["F#2", "C#3"], rh: ["A3", "C#4", "F#4", "A4"] },
+          { lh: ["G#2", "D#3"], rh: ["G#3", "B#3", "F#4", "G#4"] },
+          { lh: ["C#2", "G#2"], rh: ["E3", "G#3", "C#4", "E4"] },
+          { lh: ["C#2", "G#2", "C#3"], rh: ["E3", "G#3", "C#4", "E4"] },
+        ],
+      },
+    ];
+
+    for (const ph of phrases) {
+      // Three tolling bass octave bells
+      s.pedal(b, b + 3.9);
+      s.chord(b + 0.0, 1.4, [ph.bell[0], ph.bell[0].replace("2", "1")], vBass, "LH");
+      s.chord(b + 1.5, 1.4, [ph.bell[1], ph.bell[1].replace("2", "1")], vBass * 0.96, "LH");
+      s.chord(b + 3.0, 2.8, [ph.bell[2], ph.bell[2].replace("2", "1")], vBass * 1.04, "LH");
+      if (grand) {
+        // Famous four-staff Rachmaninoff sfff bells in upper register!
+        s.chord(b + 0.0, 1.4, ["A4", "C#5", "E5", "A5"], 0.86, "RH");
+        s.chord(b + 1.5, 1.4, ["G#4", "B#4", "D#5", "G#5"], 0.86, "RH");
+        s.chord(b + 3.0, 2.6, ["G#4", "C#5", "E5", "G#5"], 0.90, "RH");
+      }
+      b += 4.5;
+
+      // Responding harmonic bells
+      for (const ch of ph.chords) {
+        s.pedal(b, b + 2.85);
+        s.chord(b + 0.0, 2.7, ch.lh, vChord * 0.92, "LH");
+        s.chord(b + 0.5, 2.2, ch.rh, vChord, "RH");
+        if (grand) {
+          s.chord(b + 1.5, 1.3, ch.rh.map((n) => noteToMidi(n) + 12), vChord * 0.88, "RH");
+        }
+        b += 3.0;
+      }
+    }
+  };
+
+  s.setTempo(b, 46);
+  playBells(false);
+
+  // Section B: Agitato — Stormy rising chromatic triplets driving to the fff peak
+  s.setTempo(b, 102);
+  const agitatoChords = [
+    { bass: "C#2", rh: ["C#4", "E4", "G#4", "C#5", "G#4", "E4", "C#4", "E4", "G#4", "D5", "G#4", "E4"] },
+    { bass: "D2",  rh: ["D4", "F#4", "A4", "D5", "A4", "F#4", "D4", "F#4", "A4", "E5", "A4", "F#4"] },
+    { bass: "D#2", rh: ["D#4", "F#4", "B#4", "D#5", "B#4", "F#4", "D#4", "G#4", "B#4", "F#5", "B#4", "G#4"] },
+    { bass: "E2",  rh: ["E4", "G#4", "C#5", "E5", "C#5", "G#4", "E4", "A4", "C#5", "G#5", "C#5", "A4"] },
+    { bass: "F#2", rh: ["F#4", "A4", "D#5", "F#5", "D#5", "A4", "F#4", "B#4", "D#5", "A5", "D#5", "B#4"] },
+    { bass: "G#2", rh: ["G#4", "C#5", "E5", "G#5", "E5", "C#5", "G#4", "D#5", "F#5", "A5", "F#5", "D#5"] },
+    { bass: "A2",  rh: ["A4", "C#5", "E5", "A5", "E5", "C#5", "A4", "D#5", "F#5", "B5", "F#5", "D#5"] },
+    { bass: "G#2", rh: ["G#4", "B#4", "D#5", "G#5", "B#5", "G#5", "D#5", "B#4", "G#4", "F#4", "D#4", "B#3"] },
+  ];
+
+  for (let pass = 0; pass < 2; pass++) {
+    s.setTempo(b, pass === 0 ? 106 : 124);
+    for (let i = 0; i < agitatoChords.length; i++) {
+      const ag = agitatoChords[i];
+      const intensity = 0.56 + pass * 0.16 + (i / agitatoChords.length) * 0.16;
+      s.pedal(b, b + 3.85);
+      s.chord(b, 3.8, [ag.bass, ag.bass.replace("2", "3")], intensity, "LH");
+      for (let k = 0; k < 12; k++) {
+        const accent = k % 3 === 0 ? 0.08 : 0.0;
+        s.note(b + k / 3, 0.45, ag.rh[k], Math.min(0.90, intensity + accent), "RH");
+      }
+      b += 4.0;
+    }
+  }
+
+  // Descending Thunderous Chromatic Octaves leading straight into Tempo Primo fff!
+  s.setTempo(b, 92);
+  const thunderOct = ["G#4", "G4", "F#4", "F4", "E4", "D#4", "D4", "C#4", "C4", "B3", "A#3", "A3"];
+  s.pedal(b, b + 5.0);
+  for (let i = 0; i < thunderOct.length; i++) {
+    const p = thunderOct[i];
+    const lo = noteToMidi(p) - 12;
+    s.chord(b + i * 0.38, 0.48, [lo, p], 0.78 + (i / thunderOct.length) * 0.12, "RH");
+  }
+  b += thunderOct.length * 0.38 + 0.6;
+
+  // Section A': Tempo Primo — Monumental fff Four-Staff Cathedral Climax
+  s.setTempo(b, 42);
+  playBells(true);
+
+  // Coda: Sotto voce — Distant Moscow Bells fading to ppp
+  s.setTempo(b, 38);
+  const codaBells = [
+    { lh: ["A1", "A2"], rh: ["C#4", "E4", "A4"], vel: 0.44 },
+    { lh: ["G#1", "G#2"], rh: ["B#3", "D#4", "G#4"], vel: 0.38 },
+    { lh: ["C#1", "C#2", "G#2"], rh: ["C#4", "E4", "G#4", "C#5"], vel: 0.32 },
+  ];
+  for (const cb of codaBells) {
+    s.pedal(b, b + 4.8);
+    s.chord(b, 4.6, cb.lh, cb.vel, "LH", 0.06);
+    s.chord(b + 0.25, 4.3, cb.rh, cb.vel * 0.92, "RH", 0.08);
+    b += 4.6;
+  }
+  b += 2.5;
+
+  return s.build({
+    id: "rachmaninoff_prelude_c_sharp_minor_op3_no2",
+    code: "RACH-3-2",
+    composer: "Sergei Rachmaninoff (1873–1943)",
+    title: "Prelude in C♯ Minor, Op. 3 No. 2",
+    instrument: "Concert Grand Piano · Koerner Hall Acoustic Engine",
+    license: "Public Domain Composition",
+    tuningA4: 440.0,
+    year: "1892 · Morceaux de fantaisie, Op. 3",
+    keySignature: "C♯ Minor · 4/4",
+    bpm: 54,
+    historicalNote:
+      "Full concert edition of Rachmaninoff's iconic Prelude in C♯ Minor — opening with solemn Kremlin bass bells, erupting into a stormy Agitato whirlwind, and peaking in monumental four-staff chords.",
+  });
+}
+
+// ============================================================================
+// 12. P. I. TCHAIKOVSKY — JUNE: BARCAROLLE, OP. 37a NO. 6 (~4:20)
+//     G Minor · 4/4 — Andante cantabile → Poco più mosso (G Major) → Allegro → Reprise
+// ============================================================================
+function buildTchaikovskyJuneBarcarolle() {
+  const s = new ScoreBuilder(64);
+  let b = 0;
+
+  // Section A: Andante cantabile — Singing Venetian gondola barcarolle in G minor
+  const playBarcarolleA = (enriched = false) => {
+    const bars = [
+      // Gentle swaying LH gondola figure + melancholic singing RH melody
+      { lh: ["G2", "D3", "Bb3", "D3"], rh: [[0, 2.0, "G4"], [2.0, 1.0, "A4"], [3.0, 1.0, "Bb4"]] },
+      { lh: ["G2", "D3", "Bb3", "D3"], rh: [[0, 1.5, "D5"], [1.5, 0.5, "C5"], [2.0, 1.0, "Bb4"], [3.0, 1.0, "A4"]] },
+      { lh: ["C3", "G3", "Eb4", "G3"], rh: [[0, 2.0, "C5"], [2.0, 1.0, "D5"], [3.0, 1.0, "Eb5"]] },
+      { lh: ["D2", "A2", "F#3", "C4"], rh: [[0, 2.5, "D5"], [2.5, 1.5, "A4"]] },
+      { lh: ["G2", "D3", "Bb3", "D3"], rh: [[0, 1.5, "Bb4"], [1.5, 0.5, "C5"], [2.0, 1.0, "D5"], [3.0, 1.0, "G5"]] },
+      { lh: ["C3", "G3", "Eb4", "G3"], rh: [[0, 2.0, "F5"], [2.0, 1.0, "Eb5"], [3.0, 1.0, "D5"]] },
+      { lh: ["Eb2", "Bb2", "G3", "Bb3"], rh: [[0, 1.5, "Eb5"], [1.5, 0.5, "D5"], [2.0, 1.0, "C5"], [3.0, 1.0, "Bb4"]] },
+      { lh: ["D2", "A2", "F#3", "C4"], rh: [[0, 3.0, "A4"], [3.0, 1.0, "D4"]] },
+      // Answering phrase climbing to soulful G5 climax
+      { lh: ["G2", "D3", "Bb3", "D3"], rh: [[0, 1.5, "G4"], [1.5, 0.5, "A4"], [2.0, 1.0, "Bb4"], [3.0, 1.0, "D5"]] },
+      { lh: ["F2", "C3", "A3", "Eb4"], rh: [[0, 2.0, "F5"], [2.0, 1.0, "Eb5"], [3.0, 1.0, "D5"]] },
+      { lh: ["Bb2", "F3", "D4", "F3"], rh: [[0, 2.0, "D5"], [2.0, 1.0, "C5"], [3.0, 1.0, "Bb4"]] },
+      { lh: ["Eb2", "Bb2", "G3", "C4"], rh: [[0, 2.0, "C5"], [2.0, 1.0, "Bb4"], [3.0, 1.0, "A4"]] },
+      { lh: ["C2", "G2", "Eb3", "A3"], rh: [[0, 2.0, "Bb4"], [2.0, 1.0, "A4"], [3.0, 1.0, "G4"]] },
+      { lh: ["D2", "A2", "F#3", "C4"], rh: [[0, 2.0, "A4"], [2.0, 2.0, "F#4"]] },
+      { lh: ["G2", "D3", "Bb3", "G3"], rh: [[0, 4.0, "G4"]] },
+    ];
+
+    for (let i = 0; i < bars.length; i++) {
+      const bar = bars[i];
+      s.pedal(b, b + 3.85);
+      for (let k = 0; k < 4; k++) {
+        s.note(b + k, 1.15, bar.lh[k], 0.42 + (k === 0 ? 0.08 : 0), "LH");
+      }
+      const G_MINOR_DIATONIC_THIRD_BELOW = {
+        D4: "Bb3", F4: "D4", "F#4": "D4", G4: "D4", A4: "F#4", Bb4: "G4",
+        C5: "A4", D5: "Bb4", Eb5: "C5", F5: "D5", G5: "Eb5",
+      };
+      for (const [off, dur, pitch] of bar.rh) {
+        const vel = 0.60 + (enriched ? 0.08 : 0);
+        s.note(b + off, dur + 0.15, pitch, vel, "RH");
+        if (enriched) {
+          // Authentic G-minor diatonic inner harmony (zero chromatic clashes!)
+          const harmPitch = G_MINOR_DIATONIC_THIRD_BELOW[pitch] || noteToMidi(pitch) - 4;
+          s.note(b + off, dur, harmPitch, vel * 0.72, "RH");
+        }
+      }
+      b += 4.0;
+    }
+  };
+
+  s.setTempo(b, 64);
+  playBarcarolleA(false);
+
+  // Section B: Poco più mosso — Radiant G Major sunlit water duet
+  s.setTempo(b, 84);
+  const gMajorB = [
+    { lh: ["G2", "D3", "B3", "D3"], rh: [[0, 1.5, ["B4", "D5"]], [1.5, 0.5, ["C5", "E5"]], [2.0, 2.0, ["D5", "G5"]]] },
+    { lh: ["C3", "G3", "E4", "G3"], rh: [[0, 1.5, ["E5", "G5"]], [1.5, 0.5, ["D5", "F#5"]], [2.0, 2.0, ["C5", "E5"]]] },
+    { lh: ["D2", "A2", "F#3", "C4"], rh: [[0, 1.5, ["A4", "D5"]], [1.5, 0.5, ["B4", "E5"]], [2.0, 2.0, ["C5", "F#5"]]] },
+    { lh: ["G2", "D3", "B3", "D3"], rh: [[0, 2.0, ["B4", "G5"]], [2.0, 2.0, ["B4", "D5"]]] },
+    { lh: ["E2", "B2", "G3", "B3"], rh: [[0, 1.5, ["E5", "G5"]], [1.5, 0.5, ["F#5", "A5"]], [2.0, 2.0, ["G5", "B5"]]] },
+    { lh: ["A2", "E3", "C#4", "G4"], rh: [[0, 2.0, ["E5", "A5"]], [2.0, 2.0, ["C#5", "G5"]]] },
+    { lh: ["D2", "A2", "F#3", "D4"], rh: [[0, 2.0, ["D5", "F#5"]], [2.0, 2.0, ["C5", "E5"]]] },
+    { lh: ["D2", "A2", "F#3", "C4"], rh: [[0, 4.0, ["A4", "D5"]]] },
+  ];
+  for (const bar of gMajorB) {
+    s.pedal(b, b + 3.85);
+    for (let k = 0; k < 4; k++) s.note(b + k, 1.1, bar.lh[k], 0.48 + (k === 0 ? 0.08 : 0), "LH");
+    for (const [off, dur, ch] of bar.rh) s.chord(b + off, dur, ch, 0.66, "RH");
+    b += 4.0;
+  }
+
+  // Section C: Allegro giocoso — Sparkling festive Russian dance episode
+  s.setTempo(b, 114);
+  const giocoso = [
+    { lh: [["G2", "D3"], ["B3", "D4"]], rh: ["B4", "D5", "G5", "D5", "B4", "G4", "D5", "B4"] },
+    { lh: [["C2", "G2"], ["C4", "E4"]], rh: ["C5", "E5", "G5", "E5", "C5", "G4", "E5", "C5"] },
+    { lh: [["D2", "A2"], ["C4", "F#4"]], rh: ["D5", "F#5", "A5", "F#5", "D5", "C5", "A4", "F#4"] },
+    { lh: [["G2", "D3"], ["B3", "G4"]], rh: ["G4", "B4", "D5", "G5", "B5", "G5", "D5", "B4"] },
+    { lh: [["E2", "B2"], ["G3", "E4"]], rh: ["E5", "G5", "B5", "G5", "E5", "B4", "G4", "E4"] },
+    { lh: [["C2", "G2"], ["E3", "C4"]], rh: ["C5", "E5", "G5", "E5", "C5", "A4", "G4", "E4"] },
+    { lh: [["D2", "A2"], ["F#3", "C4"]], rh: ["D5", "C5", "B4", "A4", "G4", "F#4", "E4", "D4"] },
+    { lh: [["G2", "D3"], ["B3", "D4"]], rh: ["G4", "A4", "B4", "C5", "D5", "E5", "F#5", "G5"] },
+  ];
+  for (let rep = 0; rep < 2; rep++) {
+    for (const bar of giocoso) {
+      s.pedal(b, b + 1.85);
+      s.pedal(b + 2.0, b + 3.85);
+      s.chord(b + 0.0, 0.9, bar.lh[0], 0.62, "LH");
+      s.chord(b + 1.0, 0.8, bar.lh[1], 0.52, "LH");
+      s.chord(b + 2.0, 0.9, bar.lh[0], 0.60, "LH");
+      s.chord(b + 3.0, 0.8, bar.lh[1], 0.50, "LH");
+      for (let k = 0; k < 8; k++) {
+        s.note(b + k * 0.5, 0.44, bar.rh[k], 0.64 + (k % 2 === 0 ? 0.06 : 0), "RH");
+      }
+      b += 4.0;
+    }
+  }
+
+  // Section A': Nostalgic G Minor Reprise with rich inner singing voice
+  s.setTempo(b, 62);
+  playBarcarolleA(true);
+
+  // Twilight Coda — Gentle oars fading into evening mist
+  s.setTempo(b, 54);
+  for (let k = 0; k < 3; k++) {
+    const fade = 0.46 - k * 0.08;
+    s.pedal(b, b + 3.9);
+    s.note(b + 0.0, 1.8, "G2", fade, "LH");
+    s.note(b + 1.0, 1.5, "D3", fade * 0.85, "LH");
+    s.note(b + 2.0, 1.5, "Bb3", fade * 0.85, "LH");
+    s.note(b + 3.0, 1.2, "D3", fade * 0.80, "LH");
+    s.chord(b + 0.0, 3.6, ["G4", "Bb4", "D5"], fade * 0.95, "RH", 0.08);
+    b += 4.0;
+  }
+  s.setTempo(b, 46);
+  s.pedal(b, b + 6.5);
+  s.chord(b, 6.2, ["G1", "G2", "D3"], 0.42, "LH", 0.08);
+  s.chord(b + 0.18, 6.0, ["G3", "Bb3", "D4", "G4"], 0.38, "RH", 0.12);
+  b += 6.8;
+
+  return s.build({
+    id: "tchaikovsky_june_barcarolle_op37a_no6",
+    code: "TCH-JUNE",
+    composer: "Pyotr Ilyich Tchaikovsky (1840–1893)",
+    title: "June: Barcarolle, Op. 37a No. 6 (The Seasons)",
+    instrument: "Concert Grand Piano · Koerner Hall Acoustic Engine",
+    license: "Public Domain Composition",
+    tuningA4: 440.0,
+    year: "1876 · The Seasons, Op. 37a",
+    keySignature: "G Minor · 4/4",
+    bpm: 64,
+    historicalNote:
+      "Complete concert edition of Tchaikovsky's beloved 'June: Barcarolle' from The Seasons — swaying Venetian gondola lyricism opening into a radiant G major summer celebration and wistful twilight reprise.",
+  });
+}
+
+// ============================================================================
+// 13. ERIK SATIE — GYMNOPÉDIE NO. 1 (~3:30)
+//     D Major · 3/4 — Lent et douloureux (Complete translucent Maj7 waltz meditation)
+// ============================================================================
+function buildSatieGymnopedieNo1() {
+  const s = new ScoreBuilder(74);
+  let b = 0;
+
+  // Classic alternating floating GMaj7 -> DMaj7 pendulum accompaniment
+  const playPendulum = (count, vel = 0.44) => {
+    for (let i = 0; i < count; i++) {
+      const isG = i % 2 === 0;
+      s.pedal(b, b + 2.92);
+      s.note(b + 0.0, 2.85, isG ? "G2" : "D2", vel, "LH");
+      s.chord(b + 1.0, 1.90, isG ? ["B3", "D4", "F#4"] : ["A3", "C#4", "F#4"], vel * 0.86, "LH");
+      b += 3.0;
+    }
+  };
+
+  // Intro: 4 iconic swaying bars of stillness
+  playPendulum(4, 0.42);
+
+  // Full Half-Cycle Builder (Satie wrote two nearly twin architectural halves with contrasting cadences!)
+  const playGymnopedieHalf = (isSecondHalf = false) => {
+    const seq = [
+      // Main translucent melody over Gmaj7 / Dmaj7
+      { bass: "G2", ch: ["B3", "D4", "F#4"], mel: [[1, 1, "F#5"], [2, 1, "A5"]] },
+      { bass: "D2", ch: ["A3", "C#4", "F#4"], mel: [[0, 1, "G5"], [1, 1, "F#5"], [2, 1, "C#5"]] },
+      { bass: "G2", ch: ["B3", "D4", "F#4"], mel: [[0, 1, "B4"], [1, 1, "C#5"], [2, 1, "D5"]] },
+      { bass: "D2", ch: ["A3", "C#4", "F#4"], mel: [[0, 3, "A4"]] },
+      { bass: "G2", ch: ["B3", "D4", "F#4"], mel: [[0, 3, "F#4"]] },
+      { bass: "D2", ch: ["A3", "C#4", "F#4"], mel: [] },
+      { bass: "G2", ch: ["B3", "D4", "F#4"], mel: [] },
+      { bass: "D2", ch: ["A3", "C#4", "F#4"], mel: [] },
+      // Second strain — modal sighing descent
+      { bass: "G2", ch: ["B3", "D4", "F#4"], mel: [[1, 1, "F#5"], [2, 1, "A5"]] },
+      { bass: "D2", ch: ["A3", "C#4", "F#4"], mel: [[0, 1, "G5"], [1, 1, "F#5"], [2, 1, "C#5"]] },
+      { bass: "G2", ch: ["B3", "D4", "F#4"], mel: [[0, 1, "B4"], [1, 1, "C#5"], [2, 1, "D5"]] },
+      { bass: "D2", ch: ["A3", "C#4", "F#4"], mel: [[0, 3, "A4"]] },
+      // Luminous modal turn to F#m -> Bm -> Em -> D
+      { bass: "F#2", ch: ["A3", "C#4", "F#4"], mel: [[0, 3, "C#5"]] },
+      { bass: "B2", ch: ["D4", "F#4", "A4"], mel: [[0, 3, "F#5"]] },
+      { bass: "E2", ch: ["G3", "B3", "E4"], mel: [[0, 3, "E4"]] },
+      { bass: "E2", ch: ["G3", "B3", "D4"], mel: [[0, 3, "E4"]] },
+      { bass: "D2", ch: ["A3", "D4", "F#4"], mel: [[0, 1, "A4"], [1, 1, "B4"], [2, 1, "C5"]] },
+      { bass: "A2", ch: ["E3", "G3", "C4"], mel: [[0, 1, "E5"], [1, 1, "D5"], [2, 1, "B4"]] },
+      { bass: "D2", ch: ["A3", "C4", "F4"], mel: [[0, 1, "D5"], [1, 1, "C5"], [2, 1, "B4"]] },
+      { bass: "D2", ch: ["A3", "C4", "E4"], mel: [[0, 3, "D5"]] },
+      // Concluding cadence (1st half resolves to bright A/D; 2nd half settles into poetic D minor/D major)
+      { bass: "E2", ch: ["G3", "B3", "E4"], mel: [[0, 1, "D5"], [1, 1, "E5"], [2, 1, "F5"]] },
+      { bass: "A2", ch: ["E3", "G3", "C4"], mel: [[0, 1, "G5"], [1, 1, "F5"], [2, 1, "E5"]] },
+      { bass: "D2", ch: isSecondHalf ? ["F3", "A3", "D4"] : ["A3", "D4", "F#4"], mel: [[0, 3, isSecondHalf ? "F4" : "E5"]] },
+      { bass: "D2", ch: isSecondHalf ? ["F3", "A3", "D4"] : ["A3", "C#4", "E4"], mel: [[0, 3, isSecondHalf ? "D5" : "A4"]] },
+    ];
+
+    for (let i = 0; i < seq.length; i++) {
+      const bar = seq[i];
+      s.pedal(b, b + 2.94);
+      const v = isSecondHalf ? 0.41 : 0.44;
+      s.note(b + 0.0, 2.85, bar.bass, v, "LH");
+      s.chord(b + 1.0, 1.90, bar.ch, v * 0.84, "LH");
+      for (const [off, dur, pitch] of bar.mel) {
+        s.note(b + off, dur + 0.35, pitch, v + 0.14, "RH");
+      }
+      b += 3.0;
+    }
+  };
+
+  s.setTempo(b, 60);
+  playGymnopedieHalf(false);
+  playPendulum(4, 0.40);
+  s.setTempo(b, 56);
+  playGymnopedieHalf(true);
+  // Poetic suspended ending
+  s.setTempo(b, 50);
+  playPendulum(4, 0.36);
+  s.pedal(b, b + 7.5);
+  s.note(b, 7.2, "D2", 0.36, "LH");
+  s.chord(b + 1.0, 6.2, ["F#3", "A3", "D4", "F#4"], 0.34, "RH", 0.14);
+  b += 7.8;
+
+  return s.build({
+    id: "satie_gymnopedie_no1",
+    code: "SATIE-G1",
+    composer: "Erik Satie (1866–1925)",
+    title: "Gymnopédie No. 1 (Lent et douloureux)",
+    instrument: "Concert Grand Piano · Koerner Hall Acoustic Engine",
+    license: "Public Domain Composition",
+    tuningA4: 440.0,
+    year: "1888 · Paris Avant-Garde",
+    keySignature: "D Major · 3/4",
+    bpm: 74,
+    historicalNote:
+      "Complete meditative edition of Erik Satie's Gymnopédie No. 1 — luminous suspended major-seventh chords swaying gently beneath an unforgettable melancholic French melody.",
+  });
+}
+
+// ============================================================================
+// 14. W. A. MOZART — TURKISH MARCH (RONDO ALLA TURCA), K. 331 (~3:35)
+//     A Minor → A Major · 2/4 — Complete A–B–C–A–B–Janissary Coda Concert Rondo
+// ============================================================================
+function buildMozartRondoAllaTurca() {
+  const s = new ScoreBuilder(126);
+  let b = 0;
+
+  // Theme A (Authentic Mozart K. 331 Rondo Alla Turca with proper 16th-note anacrusis pickup!)
+  const playSectionA = () => {
+    const pickup = ["B4", "A4", "G#4", "A4"];
+    const aSeq = [
+      // Bar 1: C5 on Beat 0 -> D5 C5 B4 C5 pickup to Bar 2
+      { lh: ["A2", ["C3", "E3"], "A2", ["C3", "E3"]], rh: ["C5", null, null, null, "D5", "C5", "B4", "C5"] },
+      // Bar 2: E5 on Beat 0 -> F5 E5 D#5 E5 pickup to Bar 3
+      { lh: ["A2", ["C3", "E3"], "E2", ["G#2", "B2"]], rh: ["E5", null, null, null, "F5", "E5", "D#5", "E5"] },
+      // Bar 3: B5 A5 G#5 A5 B5 A5 G#5 A5
+      { lh: ["A2", ["C3", "E3"], "A2", ["C3", "E3"]], rh: ["B5", "A5", "G#5", "A5", "B5", "A5", "G#5", "A5"] },
+      // Bar 4: C6 on Beat 0 -> A5 C6 -> B5 A5 G#5
+      { lh: ["A2", ["C3", "E3"], "A2", ["C3", "E3"]], rh: ["C6", null, "A5", null, "C6", null, "B5", "A5"] },
+      // Bar 5-8: C major / G major / E minor cadence
+      { lh: ["C3", ["E3", "G3"], "G2", ["B2", "D3"]], rh: ["G5", "A5", "B5", "A5", "G5", "A5", "B5", "A5"] },
+      { lh: ["C3", ["E3", "G3"], "B2", ["D#3", "F#3"]], rh: ["G5", "F#5", "E5", "F#5", "G5", "F#5", "E5", "D#5"] },
+      { lh: ["E2", ["G2", "B2"], "B2", ["D#3", "F#3"]], rh: ["E5", null, "B4", null, "B4", "A4", "G#4", "A4"] },
+      { lh: ["A2", ["C3", "E3"], "E2", ["G#2", "B2"]], rh: ["C5", "B4", "A4", "G#4", "A4", null, null, null] },
+    ];
+    for (let rep = 0; rep < 2; rep++) {
+      // Proper 4-sixteenth anacrusis pickup before Bar 1 so C5 lands squarely on the downbeat!
+      for (let k = 0; k < 4; k++) {
+        s.note(b + k * 0.25, 0.22, pickup[k], 0.66 + (k === 0 ? 0.06 : 0), "RH");
+      }
+      b += 1.0;
+      for (const bar of aSeq) {
+        for (let k = 0; k < 4; k++) {
+          const l = bar.lh[k];
+          if (Array.isArray(l)) s.chord(b + k * 0.5, 0.36, l, 0.52, "LH");
+          else s.note(b + k * 0.5, 0.40, l, 0.60, "LH");
+        }
+        for (let k = 0; k < 8; k++) {
+          if (bar.rh[k]) s.note(b + k * 0.25, 0.22, bar.rh[k], 0.68 + (k % 2 === 0 ? 0.06 : 0), "RH");
+        }
+        b += 2.0;
+      }
+    }
+  };
+
+  // Theme B (Heroic A Major Janissary March with rolled Turkish bass chords!)
+  const playSectionB = (grand = false) => {
+    const v = grand ? 0.78 : 0.70;
+    const bSeq = [
+      { bass: ["A2", "E3", "A3"], rh: [[0, 0.45, ["A4", "A5"]], [0.5, 0.45, ["B4", "B5"]], [1.0, 0.45, ["C#5", "C#6"]], [1.5, 0.45, ["C#5", "C#6"]]] },
+      { bass: ["E2", "B2", "E3"], rh: [[0, 0.24, ["D5", "D6"]], [0.25, 0.24, ["C#5", "C#6"]], [0.5, 0.45, ["B4", "B5"]], [1.0, 0.45, ["A4", "A5"]], [1.5, 0.45, ["G#4", "G#5"]]] },
+      { bass: ["A2", "E3", "A3"], rh: [[0, 0.45, ["A4", "A5"]], [0.5, 0.45, ["B4", "B5"]], [1.0, 0.45, ["C#5", "C#6"]], [1.5, 0.45, ["B4", "B5"]]] },
+      { bass: ["E2", "B2", "E3"], rh: [[0, 0.45, ["A4", "A5"]], [0.5, 0.45, ["G#4", "G#5"]], [1.0, 0.90, ["E4", "E5"]]] },
+      { bass: ["A2", "E3", "A3"], rh: [[0, 0.45, ["A4", "A5"]], [0.5, 0.45, ["B4", "B5"]], [1.0, 0.45, ["C#5", "C#6"]], [1.5, 0.45, ["D5", "D6"]]] },
+      { bass: ["D2", "A2", "D3"], rh: [[0, 0.45, ["E5", "E6"]], [0.5, 0.45, ["D5", "D6"]], [1.0, 0.45, ["C#5", "C#6"]], [1.5, 0.45, ["B4", "B5"]]] },
+      { bass: ["E2", "B2", "E3"], rh: [[0, 0.45, ["A4", "A5"]], [0.5, 0.45, ["B4", "B5"]], [1.0, 0.45, ["G#4", "G#5"]], [1.5, 0.45, ["E4", "E5"]]] },
+      { bass: ["A2", "E3", "A3"], rh: [[0, 1.4, ["A4", "C#5", "E5", "A5"]]] },
+    ];
+    for (let rep = 0; rep < 2; rep++) {
+      for (const bar of bSeq) {
+        s.pedal(b, b + 0.9);
+        s.chord(b + 0.0, 0.55, bar.bass, v * 0.9, "LH", 0.03);
+        s.chord(b + 1.0, 0.55, bar.bass, v * 0.85, "LH", 0.03);
+        for (const [off, dur, ch] of bar.rh) {
+          s.chord(b + off, dur, ch, v, "RH");
+        }
+        b += 2.0;
+      }
+    }
+  };
+
+  // Theme C (Sparkling F♯ Minor continuous 16th-note whirlwind trio!)
+  const playSectionC = () => {
+    const cRuns = [
+      { lh: ["F#2", "A2", "C#3", "A2"], rh: ["C#5", "D5", "E5", "F#5", "E5", "D5", "C#5", "B4"] },
+      { lh: ["C#2", "G#2", "B2", "G#2"], rh: ["A4", "B4", "C#5", "D5", "C#5", "B4", "A4", "G#4"] },
+      { lh: ["F#2", "A2", "C#3", "A2"], rh: ["F#4", "G#4", "A4", "B4", "C#5", "D5", "E5", "F#5"] },
+      { lh: ["C#2", "E#2", "G#2", "C#3"], rh: ["G#5", "F#5", "E#5", "F#5", "G#5", "E#5", "C#5", "G#4"] },
+      { lh: ["F#2", "A2", "C#3", "A2"], rh: ["A4", "C#5", "F#5", "A5", "G#5", "F#5", "E5", "D5"] },
+      { lh: ["B2", "D3", "F#3", "D3"], rh: ["C#5", "B4", "A4", "G#4", "F#4", "E4", "D4", "C#4"] },
+      { lh: ["C#2", "G#2", "B2", "G#2"], rh: ["D4", "F#4", "B4", "D5", "C#5", "B4", "A4", "G#4"] },
+      { lh: ["F#2", "C#3", "F#3", "A3"], rh: ["F#4", "A4", "C#5", "F#5", "A5", "F#5", "C#5", "A4"] },
+    ];
+    for (let rep = 0; rep < 2; rep++) {
+      for (const bar of cRuns) {
+        for (let k = 0; k < 4; k++) s.note(b + k * 0.5, 0.38, bar.lh[k], 0.54, "LH");
+        for (let k = 0; k < 8; k++) s.note(b + k * 0.25, 0.22, bar.rh[k], 0.66, "RH");
+        b += 2.0;
+      }
+    }
+  };
+
+  // Full Concert Rondo Architecture with authentic classical repeats:
+  // A → B → C → B → C(Reprise) → A → B(Grand) → Janissary Coda
+  s.setTempo(b, 106);
+  playSectionA();
+  s.setTempo(b, 110);
+  playSectionB(false);
+  s.setTempo(b, 114);
+  playSectionC();
+  s.setTempo(b, 110);
+  playSectionB(false);
+  s.setTempo(b, 116);
+  playSectionC();
+  s.setTempo(b, 108);
+  playSectionA();
+  s.setTempo(b, 112);
+  playSectionB(true);
+  s.setTempo(b, 116);
+  playSectionB(true);
+
+  // Sparkling A Major Janissary Coda!
+  s.setTempo(b, 118);
+  const codaArps = [
+    ["A4", "C#5", "E5", "A5", "E5", "C#5", "A4", "E4"],
+    ["B4", "D5", "E5", "G#5", "E5", "D5", "B4", "E4"],
+    ["A4", "C#5", "E5", "A5", "C#6", "A5", "E5", "C#5"],
+    ["E5", "G#5", "B5", "E6", "B5", "G#5", "E5", "B4"],
+  ];
+  for (let rep = 0; rep < 2; rep++) {
+    for (const run of codaArps) {
+      s.pedal(b, b + 1.85);
+      s.chord(b + 0.0, 0.8, ["A1", "A2", "E3"], 0.76, "LH", 0.02);
+      s.chord(b + 1.0, 0.8, ["E2", "B2", "E3"], 0.72, "LH", 0.02);
+      for (let k = 0; k < 8; k++) s.note(b + k * 0.25, 0.24, run[k], 0.74, "RH");
+      b += 2.0;
+    }
+  }
+  s.pedal(b, b + 4.0);
+  s.chord(b + 0.0, 0.6, ["A1", "A2", "E3"], 0.84, "LH");
+  s.chord(b + 0.0, 0.6, ["A4", "C#5", "E5", "A5"], 0.84, "RH");
+  s.chord(b + 1.0, 0.6, ["E2", "B2", "E3"], 0.82, "LH");
+  s.chord(b + 1.0, 0.6, ["G#4", "B4", "E5", "G#5"], 0.82, "RH");
+  s.chord(b + 2.0, 2.2, ["A1", "A2", "E3", "A3"], 0.88, "LH");
+  s.chord(b + 2.0, 2.2, ["A4", "C#5", "E5", "A5"], 0.90, "RH");
+  b += 4.5;
+
+  return s.build({
+    id: "mozart_rondo_alla_turca_k331",
+    code: "MOZ-TURCA",
+    composer: "Wolfgang Amadeus Mozart (1756–1791)",
+    title: "Turkish March (Rondo Alla Turca), K. 331",
+    instrument: "Concert Grand Piano · Koerner Hall Acoustic Engine",
+    license: "Public Domain Composition",
+    tuningA4: 440.0,
+    year: "1783 · Piano Sonata No. 11 in A Major",
+    keySignature: "A Minor → A Major · 2/4",
+    bpm: 126,
+    historicalNote:
+      "Complete concert rondo of Mozart's dazzling Rondo Alla Turca — evoking Viennese fascination with Ottoman Janissary bands through mischievous A minor tiptoes, heroic A major marches, and sparkling 16th-note runs.",
+  });
+}
+
+// ============================================================================
+// 15. FRÉDÉRIC CHOPIN — WALTZ IN C♯ MINOR, OP. 64 NO. 2 (~3:45)
+//     C♯ Minor · 3/4 — Tempo giusto → Più mosso → Più lento (D♭ Major) → Reprise
+// ============================================================================
+function buildChopinWaltzOp64No2() {
+  const s = new ScoreBuilder(114);
+  let b = 0;
+
+  // Helper: authentic Parisian Chopin waltz bass (oom-pah-pah in 3/4)
+  const waltzBar = (bass, chord, rhEvents, velScale = 1.0) => {
+    s.pedal(b, b + 2.65);
+    s.note(b + 0.0, 0.95, bass, 0.56 * velScale, "LH");
+    s.chord(b + 1.0, 0.72, chord, 0.44 * velScale, "LH");
+    s.chord(b + 2.0, 0.68, chord, 0.42 * velScale, "LH");
+    for (const [off, dur, pitch, v] of rhEvents) {
+      if (Array.isArray(pitch)) s.chord(b + off, dur, pitch, (v || 0.64) * velScale, "RH");
+      else s.note(b + off, dur, pitch, (v || 0.64) * velScale, "RH");
+    }
+    b += 3.0;
+  };
+
+  // Section A: Tempo giusto (Melancholic yearning C♯ minor theme)
+  const playSectionA = () => {
+    const bars = [
+      { bass: "C#2", ch: ["G#3", "C#4", "E4"], rh: [[0, 2.0, "G#4", 0.64], [2.0, 1.0, "C#5", 0.68]] },
+      { bass: "C#2", ch: ["G#3", "C#4", "E4"], rh: [[0, 1.5, "E5", 0.70], [1.5, 0.5, "D#5", 0.62], [2.0, 1.0, "C#5", 0.64]] },
+      { bass: "G#2", ch: ["B#3", "D#4", "G#4"], rh: [[0, 2.0, "D#5", 0.68], [2.0, 1.0, "B#4", 0.62]] },
+      { bass: "C#2", ch: ["G#3", "C#4", "E4"], rh: [[0, 3.0, "C#5", 0.64]] },
+      { bass: "F#2", ch: ["A3", "C#4", "F#4"], rh: [[0, 1.5, "F#5", 0.72], [1.5, 0.5, "E5", 0.66], [2.0, 1.0, "D#5", 0.64]] },
+      { bass: "C#2", ch: ["G#3", "C#4", "E4"], rh: [[0, 2.0, "E5", 0.68], [2.0, 1.0, "C#5", 0.62]] },
+      { bass: "G#2", ch: ["B#3", "D#4", "F#4"], rh: [[0, 1.5, "D#5", 0.66], [1.5, 0.5, "C#5", 0.60], [2.0, 1.0, "B#4", 0.58]] },
+      { bass: "C#2", ch: ["G#3", "C#4", "E4"], rh: [[0, 3.0, "C#5", 0.62]] },
+    ];
+    for (let rep = 0; rep < 2; rep++) {
+      for (const bar of bars) waltzBar(bar.bass, bar.ch, bar.rh, rep === 1 ? 1.05 : 0.96);
+    }
+  };
+
+  // Section B: Più mosso (Famous silky swirling Chopin eighth-note ribbons!)
+  const playPiuMosso = () => {
+    const swirls = [
+      { bass: "C#2", ch: ["G#3", "C#4", "E4"], notes: ["G#4", "C#5", "E5", "D#5", "C#5", "B#4"] },
+      { bass: "G#2", ch: ["B#3", "D#4", "F#4"], notes: ["C#5", "D#5", "F#5", "E5", "D#5", "C#5"] },
+      { bass: "C#2", ch: ["G#3", "C#4", "E4"], notes: ["B#4", "C#5", "E5", "G#5", "F#5", "E5"] },
+      { bass: "F#2", ch: ["A3", "C#4", "F#4"], notes: ["D#5", "E5", "F#5", "A5", "G#5", "F#5"] },
+      { bass: "E2",  ch: ["G#3", "B3", "E4"], notes: ["E5", "D#5", "C#5", "B4", "G#5", "E5"] },
+      { bass: "A2",  ch: ["C#4", "E4", "A4"], notes: ["C#5", "E5", "A5", "G#5", "F#5", "E5"] },
+      { bass: "G#2", ch: ["B#3", "D#4", "G#4"], notes: ["D#5", "F#5", "G#5", "F#5", "D#5", "B#4"] },
+      { bass: "C#2", ch: ["G#3", "C#4", "E4"], notes: ["C#5", "E5", "G#5", "E5", "C#5", "G#4"] },
+    ];
+    for (let rep = 0; rep < 2; rep++) {
+      for (const sw of swirls) {
+        const rh = sw.notes.map((n, idx) => [idx * 0.5, 0.52, n, 0.62 + Math.sin((idx / 5) * Math.PI) * 0.12]);
+        waltzBar(sw.bass, sw.ch, rh, 1.0);
+      }
+    }
+  };
+
+  // Section C: Più lento — Radiant D♭ Major nocturnal heart of the waltz
+  const playPiuLento = () => {
+    const slowBars = [
+      { bass: "Db2", ch: ["Ab3", "Db4", "F4"], rh: [[0, 2.0, "F5", 0.64], [2.0, 1.0, "Gb5", 0.66]] },
+      { bass: "Ab2", ch: ["Eb3", "Ab3", "C4"], rh: [[0, 1.5, "Ab5", 0.70], [1.5, 0.5, "Gb5", 0.62], [2.0, 1.0, "F5", 0.64]] },
+      { bass: "Bb2", ch: ["F3", "Bb3", "Db4"], rh: [[0, 2.0, "Eb5", 0.62], [2.0, 1.0, "Db5", 0.60]] },
+      { bass: "Eb2", ch: ["Bb3", "Eb4", "Gb4"], rh: [[0, 3.0, "C5", 0.58]] },
+      { bass: "Gb2", ch: ["Db3", "Gb3", "Bb3"], rh: [[0, 2.0, "Db5", 0.62], [2.0, 1.0, "Eb5", 0.64]] },
+      { bass: "Db2", ch: ["Ab3", "Db4", "F4"], rh: [[0, 2.0, "F5", 0.68], [2.0, 1.0, "Ab5", 0.70]] },
+      { bass: "Ab2", ch: ["Eb3", "Ab3", "Gb4"], rh: [[0, 1.5, "Gb5", 0.66], [1.5, 0.5, "F5", 0.60], [2.0, 1.0, "Eb5", 0.58]] },
+      { bass: "Db2", ch: ["Ab3", "Db4", "F4"], rh: [[0, 3.0, "Db5", 0.60]] },
+    ];
+    for (let rep = 0; rep < 2; rep++) {
+      for (const bar of slowBars) waltzBar(bar.bass, bar.ch, bar.rh, rep === 1 ? 0.94 : 1.0);
+    }
+  };
+
+  // Authentic Chopin Form: A → B(Più mosso) → C(Più lento D♭) → B(Più mosso) → A → B(Finale)
+  s.setTempo(b, 92);
+  playSectionA();
+  s.setTempo(b, 130);
+  playPiuMosso();
+  s.setTempo(b, 74);
+  playPiuLento();
+  s.setTempo(b, 72);
+  playPiuLento();
+  s.setTempo(b, 132);
+  playPiuMosso();
+  s.setTempo(b, 88);
+  playSectionA();
+  s.setTempo(b, 136);
+  playPiuMosso();
+
+  // Whispered Romantic Closing Cadence in C♯ minor
+  s.setTempo(b, 96);
+  s.pedal(b, b + 6.5);
+  s.note(b + 0.0, 2.0, "G#2", 0.54, "LH");
+  s.chord(b + 0.0, 2.0, ["B#3", "D#4", "G#4"], 0.56, "RH");
+  s.chord(b + 2.2, 4.5, ["C#2", "G#2", "C#3"], 0.58, "LH", 0.06);
+  s.chord(b + 2.35, 4.3, ["E4", "G#4", "C#5", "E5"], 0.56, "RH", 0.08);
+  b += 7.0;
+
+  return s.build({
+    id: "chopin_waltz_c_sharp_minor_op64_no2",
+    code: "CHOP-W64",
+    composer: "Frédéric Chopin (1810–1849)",
+    title: "Waltz in C♯ Minor, Op. 64 No. 2",
+    instrument: "Concert Grand Piano · Koerner Hall Acoustic Engine",
+    license: "Public Domain Composition",
+    tuningA4: 440.0,
+    year: "1847 · Late Parisian Salon Masterpiece",
+    keySignature: "C♯ Minor · 3/4",
+    bpm: 114,
+    historicalNote:
+      "Complete concert architecture of Chopin's beloved Waltz in C♯ Minor, Op. 64 No. 2 — weaving together nostalgic salon yearning, silky Più mosso eighth-note ribbons, and a radiant D♭ major nocturnal heart.",
+  });
+}
+
 export const ADDITIONAL_REPERTOIRE = [
   buildFurElise(),
   buildMoonlightSonata(),
@@ -2139,7 +3333,15 @@ export const ADDITIONAL_REPERTOIRE = [
   buildLaCampanella(),
   buildWinterWind(),
   buildMozartFantasiaDMinor(),
+  buildBachPreludeBWV846(),
+  buildDebussyClairDeLune(),
+  buildRachmaninoffPreludeCSharpMinor(),
+  buildTchaikovskyJuneBarcarolle(),
+  buildSatieGymnopedieNo1(),
+  buildMozartRondoAllaTurca(),
+  buildChopinWaltzOp64No2(),
   buildDrowningLove(),
   buildMeaningfulLove(),
 ];
+
 

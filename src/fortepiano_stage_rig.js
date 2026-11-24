@@ -25,6 +25,7 @@ import {
   createMusicDeskScore,
   createPianoNoteVisualizer,
 } from "./piano_visual_fx.js";
+import { buildBrandArchitecture } from "./piano_brand_architecture.js";
 
 export const FORTEPIANO_STAGE_ANCHOR_POS = new THREE.Vector3(0.84, 0.96, 3.65);
 export const FORTEPIANO_STAGE_ROT_Y = Math.PI / 2;
@@ -1548,9 +1549,11 @@ export async function loadFortepianoStageRig({
   gltfLoader,
   maxAniso = 8,
   isSoftwareGL = false,
+  isMobile = false,
   acoustics,
   onWakeRender = () => {},
 }) {
+  const lowSpecGlass = Boolean(isSoftwareGL || isMobile);
   const gltf = await loadGstaticGlb(
     gltfLoader,
     "https://www.gstatic.com/aistudio/starter-apps/koerner-hall/stein_1780_fortepiano.glb"
@@ -1589,6 +1592,11 @@ export async function loadFortepianoStageRig({
     courses: new Array(FORTEPIANO_TOTAL_KEYS).fill(null),
   };
 
+  const historicalKneeLeverMeshes = [];
+  const historicalNameboardMeshes = [];
+  const historicalLegMeshes = [];
+  const crystalGhostUndersideMeshes = [];
+
   root.traverse((obj) => {
     restTransforms.set(obj.uuid, {
       pos: obj.position.clone(),
@@ -1596,6 +1604,7 @@ export async function loadFortepianoStageRig({
     });
 
     const name = obj.name || "";
+    const lname = name.toLowerCase();
     if (name === "Lid_Main_Pivot" || name.startsWith("Lid_Main_Pivot")) {
       rigNodes.lidMain = obj;
     } else if (name === "Lid_Flap_Pivot" || name.startsWith("Lid_Flap_Pivot")) {
@@ -1610,6 +1619,42 @@ export async function loadFortepianoStageRig({
       rigNodes.damperRack = obj;
     } else if (name === "Korpus_KneeLever_Kniehebel" || name.startsWith("Korpus_KneeLever_Kniehebel")) {
       rigNodes.kneeLever = obj;
+    }
+
+    // Classify 1780-only historical meshes & Crystal Grand ghost-underside planks (never touching keys/action/strings)
+    if (
+      obj.isMesh &&
+      !/^(?:key_|hammer_|damper_|escapement_|course_|string_)/i.test(lname)
+    ) {
+      if (lname.includes("kneelever") || lname.includes("kniehebel")) {
+        historicalKneeLeverMeshes.push(obj);
+      } else if (
+        lname.includes("korpus_nameboard_diamond") ||
+        lname.includes("korpus_nameboard_keyhole") ||
+        lname.includes("korpus_nameboard_sycamorepanel") ||
+        lname.includes("korpus_nameboard_ebonyborder") ||
+        lname.includes("korpus_nameboard_maplepurfling") ||
+        lname.includes("korpus_nameboard_innerebonypurfling") ||
+        lname.includes("korpus_nameboard_crossband") ||
+        lname.includes("korpus_schlossbrett_escutcheon") ||
+        lname.includes("korpus_schlossbrett_keyhole")
+      ) {
+        historicalNameboardMeshes.push(obj);
+      } else if (
+        lname.includes("leg_") ||
+        lname.includes("beine") ||
+        lname.includes("beinteller") ||
+        lname.includes("legboss") ||
+        /^leg\b/.test(lname)
+      ) {
+        historicalLegMeshes.push(obj);
+      } else if (
+        lname.includes("korpus_unterboden") ||
+        lname.includes("korpus_keybed_underside_frame") ||
+        lname.includes("rasten_")
+      ) {
+        crystalGhostUndersideMeshes.push(obj);
+      }
     }
 
     const keyMatch = name.match(/^Key_0*(\d+)(?:_|$)/i);
@@ -1664,11 +1709,14 @@ export async function loadFortepianoStageRig({
     }
   }
   if (rigNodes.musicDesk) {
-    rigNodes.musicDesk.visible = true;
+    rigNodes.musicDesk.visible = false;
   }
 
   const interactiveKeyMeshes = [];
   const keyMeshToMidi = new Map();
+  const keyMatRefs = Array.from({ length: FORTEPIANO_TOTAL_KEYS }, () => []);
+  const pbrEntryByMat = new Map(pbr.materialEntries.map((e) => [e.mat, e]));
+
   for (let i = 0; i < FORTEPIANO_TOTAL_KEYS; i++) {
     const kNode = rigNodes.keys[i];
     if (!kNode) continue;
@@ -1677,16 +1725,66 @@ export async function loadFortepianoStageRig({
       if (ch.isMesh) {
         keyMeshToMidi.set(ch, midi);
         interactiveKeyMeshes.push(ch);
+
+        // Clone material per key so direct on-key emissive highlight illuminates ONLY pressed keys
+        const cloneSingleMat = (origMat) => {
+          if (!origMat || !origMat.clone) return origMat;
+          const baseEntry = pbrEntryByMat.get(origMat);
+          const cloned = origMat.clone();
+          if (cloned.emissive) {
+            cloned.emissive.setHex(0x000000);
+            cloned.emissiveIntensity = 0.0;
+          }
+          if (baseEntry) {
+            pbr.materialEntries.push({
+              mat: cloned,
+              surfaceClass: baseEntry.surfaceClass,
+              orig: baseEntry.orig,
+            });
+          }
+          keyMatRefs[i].push(cloned);
+          return cloned;
+        };
+
+        if (Array.isArray(ch.material)) {
+          ch.material = ch.material.map(cloneSingleMat);
+        } else if (ch.material) {
+          ch.material = cloneSingleMat(ch.material);
+        }
       }
     });
   }
 
+  let keyGlowEnabled = false;
+  function clearAllKeyEmissives() {
+    for (let i = 0; i < FORTEPIANO_TOTAL_KEYS; i++) {
+      const mats = keyMatRefs[i];
+      for (let j = 0; j < mats.length; j++) {
+        const m = mats[j];
+        if (m && m.emissive && m.emissiveIntensity > 0) {
+          m.emissive.setHex(0x000000);
+          m.emissiveIntensity = 0.0;
+        }
+      }
+    }
+  }
+  function setKeyGlowEnabled(enabled) {
+    keyGlowEnabled = Boolean(enabled);
+    if (!keyGlowEnabled) {
+      clearAllKeyEmissives();
+    }
+    onWakeRender();
+  }
+
   pianoAnchor.updateMatrixWorld(true);
 
-  // Concert Grand 3-Pedal Lyre, Live Music Desk Score, & 3D Note Visualizer
-  const pedalLyre = buildConcertPedalLyre(pianoAnchor, isSoftwareGL);
-  const musicDeskScore = createMusicDeskScore(pianoAnchor, rigNodes, maxAniso);
-  const noteVisualizer = createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL);
+  // Brand-Unique 3D Architecture (Fallboard Logos, Cast-Iron Harps, Concert Tripods, Carved Desks, Crystal Base)
+  const brandArch = buildBrandArchitecture(pianoAnchor, isSoftwareGL, maxAniso, isMobile);
+
+  // Concert Grand 3/4-Pedal Lyre, Live HD Scrolling Music Desk Score, & 3D Note Visualizer
+  const pedalLyre = buildConcertPedalLyre(pianoAnchor, lowSpecGlass);
+  const musicDeskScore = createMusicDeskScore(pianoAnchor, rigNodes, maxAniso, isMobile);
+  const noteVisualizer = createPianoNoteVisualizer(pianoAnchor, rigNodes, lowSpecGlass);
 
   // Lid angle state ("closed" = 0°, "half" = 24°, "open" = 48.5°)
   const LID_ANGLES_DEG = { closed: 0.0, half: 24.0, open: 48.5 };
@@ -1804,14 +1902,24 @@ export async function loadFortepianoStageRig({
 
     const sustainEngaged = Boolean(acoustics?.isSustainActive || acoustics?.damperSustain);
     const unaCordaEngaged = Boolean(acoustics?.unaCordaActive);
+    const fazioliSoftEngaged = Boolean(acoustics?.fazioliSoftActive);
     const tKnee = sustainEngaged ? 1.0 : 0.0;
     if (Math.abs(tKnee - curKneeLever) > 0.001) {
       moving = true;
     }
     curKneeLever += (tKnee - curKneeLever) * pedLerp;
 
-    // Smoothly articulate the 3-pedal concert lyre
-    if (pedalLyre.updatePedals(tKnee, unaCordaEngaged ? 1.0 : 0.0, 0.0, dt, instant)) {
+    // Smoothly articulate the 3-pedal / 4-pedal (Fazioli F308) concert lyre
+    if (
+      pedalLyre.updatePedals(
+        tKnee,
+        unaCordaEngaged ? 1.0 : 0.0,
+        0.0,
+        fazioliSoftEngaged ? 1.0 : 0.0,
+        dt,
+        instant
+      )
+    ) {
       moving = true;
     }
 
@@ -1842,8 +1950,10 @@ export async function loadFortepianoStageRig({
     }
     const deskVisible = curLidAngleDeg >= 14.0;
     if (rigNodes.musicDesk) {
-      rigNodes.musicDesk.visible = deskVisible;
+      // Historical 1780 vertical rack ONLY shown on Stein 1780; modern models use bespoke carved concert desks behind the score
+      rigNodes.musicDesk.visible = isCurrentHistorical && deskVisible;
     }
+    brandArch.setDeskVisible(deskVisible);
     musicDeskScore.setVisible(deskVisible);
 
     if (rigNodes.damperRack) {
@@ -1913,6 +2023,30 @@ export async function loadFortepianoStageRig({
         if (rest) kNode.rotation.x = rest.rot.x + keyPos[i] * 0.0733;
       }
 
+      // Direct emissive highlight on the actual 3D key meshes (OFF by default; RH gold / LH sapphire)
+      const kMats = keyMatRefs[i];
+      if (kMats.length > 0) {
+        if (keyGlowEnabled && keyPos[i] > 0.04) {
+          const glowHex = keyHand[i] === "LH" ? 0x2c7be5 : 0xd99b26;
+          const glowInt = 0.78 * keyPos[i];
+          for (let jm = 0; jm < kMats.length; jm++) {
+            const m = kMats[jm];
+            if (m && m.emissive) {
+              m.emissive.setHex(glowHex);
+              m.emissiveIntensity = glowInt;
+            }
+          }
+        } else {
+          for (let jm = 0; jm < kMats.length; jm++) {
+            const m = kMats[jm];
+            if (m && m.emissive && m.emissiveIntensity > 0) {
+              m.emissive.setHex(0x000000);
+              m.emissiveIntensity = 0.0;
+            }
+          }
+        }
+      }
+
       const hNode = rigNodes.hammers[i];
       if (hNode) {
         const rest = restTransforms.get(hNode.uuid);
@@ -1977,7 +2111,8 @@ export async function loadFortepianoStageRig({
     musicDeskScore.update(
       activeNotesForScore,
       sustainEngaged,
-      perfState?.tempoRate || 1.0
+      perfState?.tempoRate || 1.0,
+      perfState
     );
 
     return moving;
@@ -1988,6 +2123,7 @@ export async function loadFortepianoStageRig({
   // ==========================================================================
   let currentKeyStyle = DEFAULT_KEY_STYLE;
   let currentModelId = DEFAULT_PIANO_MODEL_ID;
+  let isCurrentHistorical = false;
 
   function applyKeyStyle(style = "modern") {
     currentKeyStyle = style === "historical" ? "historical" : "modern";
@@ -2067,8 +2203,8 @@ export async function loadFortepianoStageRig({
     mat.sheenColor.setHex(0xe8f6ff);
     mat.side = side;
 
-    if (isSoftwareGL) {
-      // Software rasterizer safe transparent optical glass (fast, zero transmission stall)
+    if (lowSpecGlass) {
+      // Software rasterizer & mobile GPU safe transparent optical glass (60 FPS, zero transmission stall)
       mat.transmission = 0.0;
       mat.thickness = 0.0;
       mat.transparent = true;
@@ -2299,7 +2435,26 @@ export async function loadFortepianoStageRig({
       }
     }
 
-    // Sync 3-pedal concert lyre finishes to the active piano model
+    // Toggle 1780-only historical geometry vs modern concert grand brand architecture
+    isCurrentHistorical = Boolean(v.isHistorical);
+    const isCrystalModel = Boolean(v.isCrystal);
+
+    for (const m of historicalKneeLeverMeshes) m.visible = isCurrentHistorical;
+    for (const m of historicalNameboardMeshes) m.visible = isCurrentHistorical;
+    for (const m of historicalLegMeshes) m.visible = isCurrentHistorical;
+    // Eliminate double-image transparent key-front ghosting on Crystal Grand
+    for (const m of crystalGhostUndersideMeshes) m.visible = !isCrystalModel;
+
+    if (rigNodes.musicDesk) {
+      rigNodes.musicDesk.visible = isCurrentHistorical && curLidAngleDeg >= 14.0;
+    }
+
+    // Sync brand-unique fallboard logos, cast-iron harps, modern legs, carved music desks & crystal base
+    brandArch.syncPianoModelVisual(model);
+    brandArch.setDeskVisible(curLidAngleDeg >= 14.0);
+    musicDeskScore.setHistoricalOffset(isCurrentHistorical);
+
+    // Sync 3-pedal / 4-pedal (Fazioli F308) concert lyre finishes & layout to the active piano model
     pedalLyre.syncPianoModelVisual(model);
 
     // Re-apply active key style so keys stay cleanly controlled by the key toggle
@@ -2332,8 +2487,19 @@ export async function loadFortepianoStageRig({
       onWakeRender();
     },
     getNoteVizMode: () => noteVisualizer.getMode(),
-    setScorePiece: (meta) => {
-      musicDeskScore.setPieceInfo(meta);
+    setFallingNotesEnabled: (enabled) => {
+      noteVisualizer.setFallingEnabled(enabled);
+      onWakeRender();
+    },
+    getFallingNotesEnabled: () => noteVisualizer.getFallingEnabled(),
+    setKeyGlowEnabled,
+    getKeyGlowEnabled: () => keyGlowEnabled,
+    setScorePiece: (pieceOrMeta, meta = null) => {
+      if (pieceOrMeta && Array.isArray(pieceOrMeta.alignedNotes)) {
+        musicDeskScore.setPieceData(pieceOrMeta, meta);
+      } else {
+        musicDeskScore.setPieceInfo(pieceOrMeta || meta);
+      }
       onWakeRender();
     },
     strikeKey,
@@ -2346,6 +2512,7 @@ export async function loadFortepianoStageRig({
     },
     dispose() {
       stageFortepianoEnvRT.dispose();
+      brandArch.dispose();
       for (const c of pickColliders) {
         if (c.geometry) c.geometry.dispose();
       }

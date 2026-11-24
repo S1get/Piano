@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Koerner Hall - 1780 Stein-Schule Fortepiano &amp; Spatial Acoustics</title>
-  <meta name="description" content="Интерактивная 3D-академия концертного рояля: 6 марок инструментов включая хрустальный рояль, живая педаль, регулируемая крышка, 3D-анимация нот, 5 мировых концертных залов и энциклопедия композиторов и жанров." />
+  <meta name="description" content="Интерактивная 3D-академия концертного рояля: 9 легендарных марок (Steinway, Fazioli, Bösendorfer, Yamaha CFX, Shigeru Kawai, Bechstein, Blüthner, Хрустальный рояль), 20 полных произведений, 12 композиторов, 5 мировых залов и мобильная оптимизация 60 FPS." />
   <meta property="og:title" content="Koerner Hall - 1780 Stein-Schule Fortepiano &amp; Spatial Acoustics" />
-  <meta property="og:description" content="Интерактивная 3D-академия концертного рояля: 6 марок инструментов включая хрустальный рояль, живая педаль, регулируемая крышка, 3D-анимация нот, 5 мировых концертных залов и энциклопедия композиторов и жанров." />
+  <meta property="og:description" content="Интерактивная 3D-академия концертного рояля: 9 легендарных марок (Steinway, Fazioli, Bösendorfer, Yamaha CFX, Shigeru Kawai, Bechstein, Blüthner, Хрустальный рояль), 20 полных произведений, 12 композиторов, 5 мировых залов и мобильная оптимизация 60 FPS." />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2318181B'/%3E%3Cpath d='M6 21 C11 11, 21 11, 26 21' stroke='%23D4A36A' stroke-width='2.5' fill='none'/%3E%3Cpath d='M9 24 C13 16, 19 16, 23 24' stroke='%23FAF9F6' stroke-width='1.6' fill='none'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -70,11 +70,20 @@
         <button type="button" id="hud-pedal-btn" class="hud-btn hud-toggle-btn" title="Зажать или зафиксировать правую педаль сустейна (или удерживайте Shift)">
           Педаль: Авто
         </button>
+        <button type="button" id="hud-soft-pedal-btn" class="hud-btn hud-toggle-btn" hidden title="4-я педаль Fazioli F308 — уменьшает ход молоточков для мягкого пианиссимо без потери ясности тембра">
+          4-я педаль: Выкл
+        </button>
         <button type="button" id="hud-lid-btn" class="hud-btn hud-toggle-btn" title="Переключить угол крышки рояля (влияет на яркость и мягкость звука)">
           Крышка: Открыта
         </button>
-        <button type="button" id="hud-notes-btn" class="hud-btn hud-toggle-btn is-accent" title="Переключить 3D-анимацию нот: падающие ленты, частицы, оба или выкл">
-          Ноты: Оба
+        <button type="button" id="hud-falling-btn" class="hud-btn hud-toggle-btn" title="Показать или скрыть падающие 3D-ноты над клавиатурой (клавиша N)">
+          Падающие: Выкл
+        </button>
+        <button type="button" id="hud-keyglow-btn" class="hud-btn hud-toggle-btn" title="Подсветка нажимаемых клавиш прямо на 3D-клавиатуре: золото — правая рука, синий — левая (клавиша K)">
+          Подсветка: Выкл
+        </button>
+        <button type="button" id="hud-perf-btn" class="hud-btn hud-toggle-btn" title="Режим графики: Эко 60 FPS (для телефонов и ноутбуков) или Ультра">
+          Графика: Авто
         </button>
         <span class="hud-sep" aria-hidden="true"></span>
         <select id="hud-hall-select" class="hud-select hud-hall-select" aria-label="Выбор концертного зала" title="Выбор одного из 5 мировых концертных залов"></select>

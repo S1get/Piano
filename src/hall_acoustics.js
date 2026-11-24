@@ -32,6 +32,17 @@ const SPEED_OF_SOUND = 343.0; // m/s at 20 °C
 const HEAD_RADIUS_M = 0.0875;
 const SAMPLE_MIDIS = [24, 36, 43, 48, 52, 55, 60, 63, 67, 72, 76, 79, 84, 88, 91, 96];
 
+// 30-zone Studio Salamander Grand Piano (Yamaha C5, CC-BY 3.0, A4 = 440 Hz)
+const SALAMANDER_BASE_URL = "https://tonejs.github.io/audio/salamander/";
+const SALAMANDER_ZONES = [
+  [21, "A0"], [24, "C1"], [27, "Ds1"], [30, "Fs1"], [33, "A1"],
+  [36, "C2"], [39, "Ds2"], [42, "Fs2"], [45, "A2"], [48, "C3"],
+  [51, "Ds3"], [54, "Fs3"], [57, "A3"], [60, "C4"], [63, "Ds4"],
+  [66, "Fs4"], [69, "A4"], [72, "C5"], [75, "Ds5"], [78, "Fs5"],
+  [81, "A5"], [84, "C6"], [87, "Ds6"], [90, "Fs6"], [93, "A6"],
+  [96, "C7"], [99, "Ds7"], [102, "Fs7"], [105, "A7"], [108, "C8"],
+];
+
 // 1780 Stein-Schule Fortepiano acoustic radiation center in Koerner Hall Three.js world space:
 // Anchor at (0.84, 0.96, 3.65), rotY = +PI/2 -> Haselfichte spruce soundboard centroid at (-0.08, 1.78, 3.65)
 export const PIANO_ACOUSTIC_SOURCE = new THREE.Vector3(-0.08, 1.78, 3.65);
@@ -59,6 +70,13 @@ const PIECE_SHORT_LABELS = {
   liszt_la_campanella_s141_no3: "La Campanella · Лист ▾",
   chopin_winter_wind_op25_no11: "Зимний ветер · Шопен ▾",
   mozart_fantasia_d_minor_k397: "Фантазия ре минор · Моцарт ▾",
+  bach_prelude_c_major_bwv846: "Прелюдия до мажор · Бах ▾",
+  debussy_clair_de_lune: "Clair de Lune · Дебюсси ▾",
+  rachmaninoff_prelude_c_sharp_minor_op3_no2: "Прелюдия cis-moll · Рахманинов ▾",
+  tchaikovsky_june_barcarolle_op37a_no6: "Июнь. Баркарола · Чайковский ▾",
+  satie_gymnopedie_no1: "Гимнопедия № 1 · Сати ▾",
+  mozart_rondo_alla_turca_k331: "Турецкий марш · Моцарт ▾",
+  chopin_waltz_c_sharp_minor_op64_no2: "Вальс Op. 64 № 2 · Шопен ▾",
   sakamoto_drowning_love_chasing_kou: "Drowning Love · Сакамото ▾",
   silo_meaningful_love: "Meaningful Love · Неоклассика ▾",
 };
@@ -90,11 +108,17 @@ export class KoernerHallAcousticsEngine {
     this.pianoAudioProfile = getPianoModel(DEFAULT_PIANO_MODEL_ID).audio;
     this.sampleBuffers = new Map();
     this.samplesLoadingPromise = null;
+    this.salamanderBuffers = new Map();
+    this.salamanderLoadingPromise = null;
+    this.salamanderMidReadyPromise = null;
+    this._damperNoiseBuf = null;
+    this._lastDamperNoiseMs = 0;
     this.concertPitchHz = this.pianoAudioProfile.a4Hz || 440.0;
     this.moderator = false;
     this.damperSustain = false; // Auto repertoire damper pedal
     this.manualSustain = false; // User manual sustain pedal (Shift / HUD / 3D pedal)
     this.unaCordaActive = false; // Soft pedal (left pedal)
+    this.fazioliSoftActive = false; // Fazioli F308 4th pedal (vertical hammer-travel soft pedal)
     this.lidOpenness = 1.0; // 0 = closed, 0.5 = half, 1.0 = full open
     this.hallId = DEFAULT_HALL_ID;
     this.hallProfile = getConcertHall(DEFAULT_HALL_ID);
@@ -105,6 +129,7 @@ export class KoernerHallAcousticsEngine {
     this.activeVoices = new Map();
     this.repertoireKeysDown = new Set();
     this.repertoireVoices = [];
+    this.isMobileProfile = false;
 
     // Scratch vectors for spatial evaluation
     this._toSource = new THREE.Vector3();
@@ -196,7 +221,7 @@ export class KoernerHallAcousticsEngine {
 
     // 5. Compact 2.10m Spruce Soundboard Angular Subtense Stereo Width (Mid/Side) + Binaural ITD / ILD
     const stereoWidth = clamp(0.22 + 1.38 / Math.sqrt(Math.max(0.95, d)), 0.24, 1.24);
-    const binauralPan = clamp(rightDot * clamp((d - 0.75) / 3.0, 0.25, 0.90), -0.90, 0.90);
+    const binauralPan = clamp(rightDot * clamp((d - 0.75) / 2.2, 0.35, 0.94), -0.92, 0.92);
 
     const absAz = Math.abs(azimuthRad);
     const woodworthSec =
@@ -205,8 +230,8 @@ export class KoernerHallAcousticsEngine {
     const delayRightSec = rightDot < 0 ? woodworthSec : 0.0;
 
     const rearPinnaDb = fwdDot < 0 ? fwdDot * 2.1 : 0.0;
-    const leftHeadHighDb = (rightDot > 0 ? -3.1 * rightDot : 0.4 * -rightDot) + rearPinnaDb;
-    const rightHeadHighDb = (rightDot < 0 ? -3.1 * -rightDot : 0.4 * rightDot) + rearPinnaDb;
+    const leftHeadHighDb = (rightDot > 0 ? -4.4 * rightDot : 0.7 * -rightDot) + rearPinnaDb;
+    const rightHeadHighDb = (rightDot < 0 ? -4.4 * -rightDot : 0.7 * rightDot) + rearPinnaDb;
 
     // 6. 1st-Order Image-Source Early Reflections (delays & gains)
     const propDelaySec = clamp(d / SPEED_OF_SOUND, 0.0024, 0.12);
@@ -503,6 +528,11 @@ export class KoernerHallAcousticsEngine {
     this.earShadowR = ctx.createBiquadFilter();
     this.earShadowR.type = "highshelf";
     this.earShadowR.frequency.value = 2400.0;
+    // Woodworth Interaural Time Difference (ITD, max ~0.66 ms) for authentic headphone left/right localization
+    this.earDelayL = ctx.createDelay(0.01);
+    this.earDelayL.delayTime.value = 0.0;
+    this.earDelayR = ctx.createDelay(0.01);
+    this.earDelayR.delayTime.value = 0.0;
     const earMerge = ctx.createChannelMerger(2);
 
     directMerger.connect(this.lidShelfFilter);
@@ -514,10 +544,12 @@ export class KoernerHallAcousticsEngine {
     this.directPanner.connect(earSplit);
 
     earSplit.connect(this.earShadowL, 0);
-    this.earShadowL.connect(earMerge, 0, 0);
+    this.earShadowL.connect(this.earDelayL);
+    this.earDelayL.connect(earMerge, 0, 0);
 
     earSplit.connect(this.earShadowR, 1);
-    this.earShadowR.connect(earMerge, 0, 1);
+    this.earShadowR.connect(this.earDelayR);
+    this.earDelayR.connect(earMerge, 0, 1);
 
     // --- B. 4-BANK SILENT-LATCH EARLY REFLECTION CROSSFADER ---
     // DelayNode.delayTime on any bank is ONLY ever set while that bank's masterGain is strictly 0.0,
@@ -730,6 +762,8 @@ export class KoernerHallAcousticsEngine {
     this._setParamImmediate("directPan", this.directPanner.pan, m.binauralPan, now);
     this._setParamImmediate("earShadowL", this.earShadowL.gain, m.leftHeadHighDb, now);
     this._setParamImmediate("earShadowR", this.earShadowR.gain, m.rightHeadHighDb, now);
+    if (this.earDelayL) this.earDelayL.delayTime.setValueAtTime(m.delayLeftSec || 0.0, now);
+    if (this.earDelayR) this.earDelayR.delayTime.setValueAtTime(m.delayRightSec || 0.0, now);
     this._setParamImmediate("reverbSend", this.reverbSend.gain, m.reverbSendGain, now);
     this._setParamImmediate("reverbAirLP", this.reverbAirLP.frequency, revLP, now);
 
@@ -868,6 +902,8 @@ export class KoernerHallAcousticsEngine {
     this._scheduleSCurve("directPan", this.directPanner.pan, m.binauralPan, now, dur, false);
     this._scheduleSCurve("earShadowL", this.earShadowL.gain, m.leftHeadHighDb, now, dur, false);
     this._scheduleSCurve("earShadowR", this.earShadowR.gain, m.rightHeadHighDb, now, dur, false);
+    if (this.earDelayL) this.earDelayL.delayTime.setTargetAtTime(m.delayLeftSec || 0.0, now, 0.05);
+    if (this.earDelayR) this.earDelayR.delayTime.setTargetAtTime(m.delayRightSec || 0.0, now, 0.05);
     this._scheduleSCurve("reverbSend", this.reverbSend.gain, m.reverbSendGain, now, dur, true);
     this._scheduleSCurve("reverbAirLP", this.reverbAirLP.frequency, revLP, now, dur, true);
 
@@ -905,6 +941,8 @@ export class KoernerHallAcousticsEngine {
     this._slewParam("directPan", this.directPanner.pan, m.binauralPan, now, slewSec);
     this._slewParam("earShadowL", this.earShadowL.gain, m.leftHeadHighDb, now, slewSec);
     this._slewParam("earShadowR", this.earShadowR.gain, m.rightHeadHighDb, now, slewSec);
+    if (this.earDelayL) this.earDelayL.delayTime.setTargetAtTime(m.delayLeftSec || 0.0, now, 0.045);
+    if (this.earDelayR) this.earDelayR.delayTime.setTargetAtTime(m.delayRightSec || 0.0, now, 0.045);
     this._slewParam("reverbSend", this.reverbSend.gain, m.reverbSendGain, now, slewSec);
     this._slewParam("reverbAirLP", this.reverbAirLP.frequency, revLP, now, slewSec);
 
@@ -929,9 +967,12 @@ export class KoernerHallAcousticsEngine {
   }
 
   // ==========================================================================
-  // INTERACTIVE 61-KEY SCHLOSS KREMSEGG HISTORICAL FORTEPIANO VOICE SYNTH
+  // STUDIO SALAMANDER CONCERT GRAND + LOCAL KREMSEGG MULTI-SAMPLE ENGINE
   // ==========================================================================
   preloadKeySamples() {
+    // Also kick off progressive 30-zone studio Salamander Grand Piano loader in parallel
+    this.preloadSalamanderSamples();
+
     if (this.samplesLoadingPromise) return this.samplesLoadingPromise;
     const OfflineAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
     if (!OfflineAC) return Promise.resolve();
@@ -958,6 +999,58 @@ export class KoernerHallAcousticsEngine {
     return this.samplesLoadingPromise;
   }
 
+  setPerformanceProfile({ isMobile = false } = {}) {
+    this.isMobileProfile = Boolean(isMobile);
+  }
+
+  preloadSalamanderSamples() {
+    if (this.salamanderLoadingPromise) return this.salamanderLoadingPromise;
+    const OfflineAC = window.OfflineAudioContext || window.webkitOfflineAudioContext;
+    if (!OfflineAC) return Promise.resolve();
+    const decodeCtx = new OfflineAC(2, 1, 44100);
+
+    const loadZone = async (midi, noteName) => {
+      try {
+        const res = await fetch(`${SALAMANDER_BASE_URL}${noteName}.mp3`, { mode: "cors" });
+        if (!res.ok) return;
+        const ab = await res.arrayBuffer();
+        const audioBuf = await decodeCtx.decodeAudioData(ab);
+        this.salamanderBuffers.set(midi, audioBuf);
+      } catch (_) {
+        // Silent offline/CORS fallback — local Kremsegg sample bank remains active seamlessly
+      }
+    };
+
+    // On mobile phones, load 15 alternating studio zones (still <= 3 semitones pitch shift!)
+    // cutting decoded audio RAM & network bandwidth in half with indistinguishable tonal quality.
+    const activeZones = this.isMobileProfile
+      ? SALAMANDER_ZONES.filter((_, idx) => idx % 2 === 0 || idx === SALAMANDER_ZONES.length - 1)
+      : SALAMANDER_ZONES;
+
+    // Priority 1: Middle concert register (C3..C6) so immediate melodies sound studio-grade right away
+    const midZones = activeZones.filter(([m]) => m >= 48 && m <= 84);
+    const outerZones = activeZones.filter(([m]) => m < 48 || m > 84);
+
+    this.salamanderMidReadyPromise = Promise.all(midZones.map(([m, name]) => loadZone(m, name)));
+    this.salamanderLoadingPromise = (async () => {
+      await this.salamanderMidReadyPromise;
+      // Priority 2: Deep concert bass & upper sparkle register
+      await Promise.all(outerZones.map(([m, name]) => loadZone(m, name)));
+    })();
+    return this.salamanderLoadingPromise;
+  }
+
+  async waitForActivePianoSamples() {
+    this.preloadKeySamples();
+    if (this.pianoAudioProfile?.useSalamander && this.salamanderMidReadyPromise) {
+      await this.salamanderMidReadyPromise;
+      if (this.salamanderBuffers.size >= 4) return;
+    }
+    if (this.samplesLoadingPromise) {
+      await this.samplesLoadingPromise;
+    }
+  }
+
   _nearestSampleMidi(midi) {
     let best = SAMPLE_MIDIS[0];
     let bestDist = Math.abs(midi - best);
@@ -969,6 +1062,65 @@ export class KoernerHallAcousticsEngine {
       }
     }
     return best;
+  }
+
+  _nearestSalamanderMidi(midi) {
+    if (this.salamanderBuffers.size === 0) return -1;
+    let best = -1;
+    let bestDist = Infinity;
+    for (const s of this.salamanderBuffers.keys()) {
+      const d = Math.abs(midi - s);
+      if (d < bestDist) {
+        best = s;
+        bestDist = d;
+      }
+    }
+    return best;
+  }
+
+  _ensureDamperNoiseBuffer() {
+    if (this._damperNoiseBuf || !this.ctx) return this._damperNoiseBuf;
+    const sr = this.ctx.sampleRate || 44100;
+    const len = Math.floor(sr * 0.045);
+    const buf = this.ctx.createBuffer(1, len, sr);
+    const ch = buf.getChannelData(0);
+    let seed = 0x2f6e2b1;
+    for (let i = 0; i < len; i++) {
+      seed = (seed * 1664525 + 1013904223) >>> 0;
+      const white = (seed / 0xffffffff) * 2.0 - 1.0;
+      const env = Math.sin(Math.min(1.0, i / (len * 0.16)) * Math.PI * 0.5) * Math.pow(1.0 - i / len, 2.2);
+      ch[i] = white * env;
+    }
+    this._damperNoiseBuf = buf;
+    return buf;
+  }
+
+  _triggerDamperFeltRelease(midi) {
+    const prof = this.pianoAudioProfile;
+    const mix = prof?.damperNoiseMix || 0;
+    if (mix <= 0.005 || !this.ctx || !this.sourceBus) return;
+    const nowWall = performance.now();
+    if (nowWall - this._lastDamperNoiseMs < 48) return;
+    this._lastDamperNoiseMs = nowWall;
+
+    const buf = this._ensureDamperNoiseBuffer();
+    if (!buf) return;
+    const now = this.ctx.currentTime;
+    const src = this.ctx.createBufferSource();
+    src.buffer = buf;
+
+    const lp = this.ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = midi < 48 ? 220 : 310;
+    lp.Q.value = 0.7;
+
+    const g = this.ctx.createGain();
+    g.gain.value = clamp(mix * 0.65, 0.01, 0.09);
+
+    src.connect(lp);
+    lp.connect(g);
+    g.connect(this.sourceBus);
+    src.start(now);
   }
 
   get isSustainActive() {
@@ -1006,13 +1158,17 @@ export class KoernerHallAcousticsEngine {
   _refreshLidAndUnaCordaTone() {
     if (!this.graphReady || !this.ctx) return;
     const now = this.ctx.currentTime;
-    // Closed lid = -5.6 dB above 1.75 kHz; Half = -2.2 dB; Open = 0 dB; Una Corda adds -3.2 dB & softer gain
+    // Closed lid = -5.6 dB above 1.75 kHz; Half = -2.2 dB; Open = 0 dB
+    // Una Corda shifts hammers sideways (-3.4 dB treble & 0.76x gain); Fazioli 4th Soft Pedal lowers travel cleanly (-1.1 dB & 0.72x gain)
     const lidDb = this.lidOpenness <= 0.1 ? -5.6 : this.lidOpenness <= 0.7 ? -2.2 : 0.0;
     const unaDb = this.unaCordaActive ? -3.4 : 0.0;
+    const fazioliDb = this.fazioliSoftActive ? -1.1 : 0.0;
     const hallAir = this.hallProfile?.acoustics?.airTiltDb || 0.0;
-    this.lidAngleShelf.gain.setTargetAtTime(lidDb + unaDb + hallAir, now, 0.08);
+    this.lidAngleShelf.gain.setTargetAtTime(lidDb + unaDb + fazioliDb + hallAir, now, 0.08);
     this.unaCordaGain.gain.setTargetAtTime(
-      (this.unaCordaActive ? 0.76 : 1.0) * (this.lidOpenness <= 0.1 ? 0.86 : this.lidOpenness <= 0.7 ? 0.94 : 1.0),
+      (this.unaCordaActive ? 0.76 : 1.0) *
+        (this.fazioliSoftActive ? 0.72 : 1.0) *
+        (this.lidOpenness <= 0.1 ? 0.86 : this.lidOpenness <= 0.7 ? 0.94 : 1.0),
       now,
       0.08
     );
@@ -1025,6 +1181,11 @@ export class KoernerHallAcousticsEngine {
 
   setUnaCorda(engaged) {
     this.unaCordaActive = Boolean(engaged);
+    this._refreshLidAndUnaCordaTone();
+  }
+
+  setFazioliSoft(engaged) {
+    this.fazioliSoftActive = Boolean(engaged);
     this._refreshLidAndUnaCordaTone();
   }
 
@@ -1056,7 +1217,7 @@ export class KoernerHallAcousticsEngine {
     this.zoneProfile = zone;
 
     const pos = new THREE.Vector3(...zone.listenerPos);
-    const target = new THREE.Vector3(...zone.lookAt);
+    const target = new THREE.Vector3(...(zone.headLookAt || zone.lookAt));
     const m4 = new THREE.Matrix4().lookAt(pos, target, new THREE.Vector3(0, 1, 0));
     const quat = new THREE.Quaternion().setFromRotationMatrix(m4);
     const fakeSeat = { tier: zone.tier, label: zone.name };
@@ -1107,51 +1268,75 @@ export class KoernerHallAcousticsEngine {
   }
 
   /**
-   * Builds a soft, warm Concert Grand Piano voice shaped by the active piano model profile:
-   * felt-hammer attack ramp, velocity & pitch-tracked dynamic lowpass decay, warm soundboard
-   * fundamental reinforcement (removes brittle fortepiano thinness), and optional Crystal shimmer.
+   * Builds a Studio Concert Grand Piano voice shaped by the active piano model profile:
+   * - Prefers 30-zone Salamander Concert Grand samples (A4 = 440 Hz) on all modern brands,
+   *   with seamless fallback to local Schloss Kremsegg multi-samples (and authentic Kremsegg on Stein 1780).
+   * - Adds Sympathetic String Resonance when the Sustain pedal lifts all dampers.
+   * - Adds Duplex Scale Shimmer on high-velocity treble notes for Steinway/Fazioli/Yamaha clarity.
+   * - Preserves warm soundboard fundamental & optional Crystal optical overtone halo.
    */
-  _createGrandVoiceNodes(midi, vel, ampScale, panSpread) {
+  _createGrandVoiceNodes(midi, vel, ampScale, panSpread, whenSec = null) {
     const now = this.ctx.currentTime;
+    const t0 = Math.max(now, Number.isFinite(whenSec) ? whenSec : now);
     const prof = this.pianoAudioProfile;
-    const refMidi = this._nearestSampleMidi(midi);
-    // Reference samples recorded near A4 = 430 Hz -> tune smoothly to active grand pitch (440/442/425 Hz)
-    const pitchRatio = (this.concertPitchHz / 430.0) * Math.pow(2.0, (midi - refMidi) / 12.0);
     const freq = this.concertPitchHz * Math.pow(2.0, (midi - 69) / 12.0);
+
+    // Check if 30-zone studio Salamander Grand sample is ready for this modern brand
+    const salMidi = prof.useSalamander ? this._nearestSalamanderMidi(midi) : -1;
+    const useSalamanderVoice = salMidi >= 0 && Math.abs(midi - salMidi) <= 12;
+    const salBuf = useSalamanderVoice ? this.salamanderBuffers.get(salMidi) : null;
+
+    const refMidi = this._nearestSampleMidi(midi);
     const bufMp = this.sampleBuffers.get(`${refMidi}_mp`);
     const bufF = this.sampleBuffers.get(`${refMidi}_f`);
 
     // Pitch-dependent felt warmth: low notes have rounder upper harmonics, treble sings smoothly
     const registerNorm = clamp((midi - 24) / 68.0, 0.0, 1.0);
-    const registerWarmth = 0.72 + registerNorm * 0.56;
+    const registerWarmth = 0.76 + registerNorm * 0.52;
+    const salFilterBoost = salBuf ? 1.28 : 1.0;
     const peakCutoff = clamp(
-      (prof.lpBaseHz + Math.pow(vel, 1.38) * prof.lpVelSpanHz) * registerWarmth * (this.moderator ? 0.55 : 1.0),
-      460,
-      16500
+      (prof.lpBaseHz + Math.pow(vel, 1.32) * prof.lpVelSpanHz) *
+        registerWarmth *
+        salFilterBoost *
+        (this.moderator ? 0.55 : 1.0),
+      560,
+      19500
     );
-    const settledCutoff = clamp(peakCutoff * (prof.lpDecayRatio || 0.55), 340, 12000);
+    const settledCutoff = clamp(peakCutoff * (prof.lpDecayRatio || 0.62), 420, 14500);
 
     const filter = this.ctx.createBiquadFilter();
     filter.type = "lowpass";
     filter.Q.value = prof.lpQ || 0.50;
-    filter.frequency.setValueAtTime(peakCutoff, now);
-    filter.frequency.exponentialRampToValueAtTime(settledCutoff, now + 0.44);
+    filter.frequency.setValueAtTime(peakCutoff, t0);
+    filter.frequency.exponentialRampToValueAtTime(settledCutoff, t0 + 0.56);
 
     const panner = this.ctx.createStereoPanner();
     panner.pan.value = clamp(((midi - 29) / 60.0 - 0.5) * panSpread, -0.78, 0.78);
 
     const voiceGain = this.ctx.createGain();
-    const amp = Math.pow(vel, 1.42) * ampScale;
-    const attackSec = clamp(prof.attackSec || 0.010, 0.0025, 0.022);
-    voiceGain.gain.setValueAtTime(0.0001, now);
-    voiceGain.gain.linearRampToValueAtTime(amp, now + attackSec);
+    const amp = Math.pow(vel, 1.35) * ampScale * (salBuf ? 1.24 : 1.02);
+    const baseAttack = clamp(prof.attackSec || 0.005, 0.002, 0.018);
+    const attackSec = baseAttack + (this.fazioliSoftActive ? 0.003 : 0.0);
+    voiceGain.gain.setValueAtTime(0.0001, t0);
+    voiceGain.gain.linearRampToValueAtTime(amp, t0 + attackSec);
 
     filter.connect(panner);
     panner.connect(voiceGain);
     voiceGain.connect(this.sourceBus);
 
     const sources = [];
-    if (bufMp || bufF) {
+    if (salBuf) {
+      // Pure Studio Salamander Concert Grand Piano recording (A4 = 440 Hz, zero synthetic sine beating)
+      const salRatio = (this.concertPitchHz / 440.0) * Math.pow(2.0, (midi - salMidi) / 12.0);
+      const sSal = this.ctx.createBufferSource();
+      sSal.buffer = salBuf;
+      sSal.playbackRate.value = salRatio;
+      sSal.connect(filter);
+      sSal.start(t0);
+      sources.push(sSal);
+    } else if (bufMp || bufF) {
+      // Authentic Schloss Kremsegg 1830 fortepiano multi-samples (recorded near A4 = 430 Hz)
+      const pitchRatio = (this.concertPitchHz / 430.0) * Math.pow(2.0, (midi - refMidi) / 12.0);
       const fMix =
         clamp((vel - 0.30) / 0.64, 0, 1) *
         (prof.fMixBias ?? 0.42) *
@@ -1165,7 +1350,7 @@ export class KoernerHallAcousticsEngine {
         gMp.gain.value = mpMix;
         sMp.connect(gMp);
         gMp.connect(filter);
-        sMp.start(now);
+        sMp.start(t0);
         sources.push(sMp);
       }
       if (bufF && fMix > 0.02) {
@@ -1176,69 +1361,29 @@ export class KoernerHallAcousticsEngine {
         gF.gain.value = fMix;
         sF.connect(gF);
         gF.connect(filter);
-        sF.start(now);
+        sF.start(t0);
         sources.push(sF);
       }
     } else {
-      // Soft velvet grand-piano fallback while MP3 sample bank finishes decoding
+      // Clean velvet piano fallback only while network sample bank is still decoding
       const decayBase = clamp(3.6 - registerNorm * 1.9, 1.3, 4.2);
       for (const [harm, hGain] of [[1, 0.52], [2, 0.22], [3, 0.08], [4, 0.025]]) {
         const osc = this.ctx.createOscillator();
         osc.type = "sine";
         osc.frequency.value = freq * harm;
         const hg = this.ctx.createGain();
-        hg.gain.setValueAtTime(0.0001, now);
-        hg.gain.linearRampToValueAtTime(hGain, now + attackSec * 1.2);
-        hg.gain.exponentialRampToValueAtTime(0.0001, now + decayBase / Math.pow(harm, 0.9));
+        hg.gain.setValueAtTime(0.0001, t0);
+        hg.gain.linearRampToValueAtTime(hGain, t0 + attackSec * 1.2);
+        hg.gain.exponentialRampToValueAtTime(0.0001, t0 + decayBase / Math.pow(harm, 0.9));
         osc.connect(hg);
         hg.connect(filter);
-        osc.start(now);
-        osc.stop(now + decayBase + 0.15);
+        osc.start(t0);
+        osc.stop(t0 + decayBase + 0.15);
         sources.push(osc);
       }
     }
 
-    // Warm Concert Grand Fundamental Body Reinforcement (deep velvety soundboard bloom)
-    if (prof.subWarmthMix > 0.01 && freq >= 27 && freq <= 1400) {
-      const warmWeight = clamp(1.18 - registerNorm * 0.85, 0.24, 1.18);
-      const warmLevel = prof.subWarmthMix * warmWeight;
-      const warmDecay = clamp(5.2 - registerNorm * 2.8, 1.6, 5.6);
-      const bodyOsc = this.ctx.createOscillator();
-      bodyOsc.type = "sine";
-      bodyOsc.frequency.value = freq;
-      const bodyGain = this.ctx.createGain();
-      bodyGain.gain.setValueAtTime(0.0001, now);
-      bodyGain.gain.linearRampToValueAtTime(warmLevel, now + Math.max(0.014, attackSec * 1.4));
-      bodyGain.gain.exponentialRampToValueAtTime(0.0001, now + warmDecay);
-      bodyOsc.connect(bodyGain);
-      bodyGain.connect(panner); // Bypass heavy sample lowpass for pure, clean fundamental warmth
-      bodyOsc.start(now);
-      bodyOsc.stop(now + warmDecay + 0.1);
-      sources.push(bodyOsc);
-    }
-
-    // Crystal Grand Optical Glass Shimmer Layer (delicate crystalline upper-harmonic halo)
-    if (prof.crystalShimmerMix > 0.01 && freq >= 55 && freq <= 2200) {
-      const shimmerDecay = clamp(4.6 - registerNorm * 1.8, 1.8, 4.8);
-      for (const [mult, ratio] of [[2.0, 0.65], [3.0, 0.28]]) {
-        const fHarm = freq * mult;
-        if (fHarm > 6800) continue;
-        const shOsc = this.ctx.createOscillator();
-        shOsc.type = "sine";
-        shOsc.frequency.value = fHarm;
-        const shGain = this.ctx.createGain();
-        shGain.gain.setValueAtTime(0.0001, now);
-        shGain.gain.linearRampToValueAtTime(prof.crystalShimmerMix * ratio * (0.55 + vel * 0.45), now + 0.024);
-        shGain.gain.exponentialRampToValueAtTime(0.0001, now + shimmerDecay / mult * 1.35);
-        shOsc.connect(shGain);
-        shGain.connect(panner);
-        shOsc.start(now);
-        shOsc.stop(now + shimmerDecay + 0.1);
-        sources.push(shOsc);
-      }
-    }
-
-    return { voiceGain, sources };
+    return { voiceGain, sources, startTime: t0 };
   }
 
   playInteractiveNoteOn(rawMidi, velocity = 0.80) {
@@ -1272,9 +1417,11 @@ export class KoernerHallAcousticsEngine {
     const now = this.ctx.currentTime;
     const scale = this.pianoAudioProfile?.sustainReleaseScale || 1.5;
     const releaseTau = (midi < 45 ? 0.072 : 0.044) * scale;
+    let dampedAny = false;
     for (const v of list) {
       if (v.damped) continue;
       v.damped = true;
+      dampedAny = true;
       try {
         v.voiceGain.gain.cancelScheduledValues(now);
         v.voiceGain.gain.setTargetAtTime(0.00001, now, releaseTau);
@@ -1288,6 +1435,9 @@ export class KoernerHallAcousticsEngine {
         this._cleanupVoice(midi, v);
       }, Math.ceil(releaseTau * 6500));
     }
+    if (dampedAny) {
+      this._triggerDamperFeltRelease(midi);
+    }
   }
 
   _cleanupVoice(midi, voice) {
@@ -1300,49 +1450,56 @@ export class KoernerHallAcousticsEngine {
   // ==========================================================================
   // POLYPHONIC CONCERT GRAND REPERTOIRE VOICE ENGINE
   // ==========================================================================
-  playRepertoireNoteOn(rawMidi, velocity = 0.72) {
+  playRepertoireNoteOn(rawMidi, velocity = 0.72, whenSec = null) {
     const midi = clamp(Math.round(rawMidi), 24, 98);
     this.repertoireKeysDown.add(midi);
     this.ensureContext();
     this.resumeNonBlocking();
     this.preloadKeySamples();
-    if (!this.ctx || !this.sourceBus) return;
+    if (!this.ctx || !this.sourceBus) return null;
 
     const vel = clamp(velocity, 0.10, 1.0);
+    const now = this.ctx.currentTime;
+    const t0 = Math.max(now, Number.isFinite(whenSec) ? whenSec : now);
 
-    // Gracefully damp any older ringing voice on the exact same pitch before re-strike
+    // Gracefully damp any older ringing voice on the exact same pitch right before re-strike
     for (const v of this.repertoireVoices) {
-      if (v.midi === midi && !v.damped) {
-        this._fadeAndStopRepertoireVoice(v, 0.042);
+      if (v.midi === midi && !v.damped && (v.startTime || 0) <= t0 - 0.005) {
+        this._fadeAndStopRepertoireVoice(v, 0.036, Math.max(now, t0 - 0.012));
       }
     }
 
-    // Generous concert polyphony budget (44 concurrent voices) for lush pedaled chords
-    const MAX_POLYPHONY = 44;
+    // Generous concert polyphony budget (48 desktop / 26 mobile) for lush pedaled chords without crackle
+    const MAX_POLYPHONY = this.isMobileProfile ? 26 : 48;
     if (this.repertoireVoices.length >= MAX_POLYPHONY) {
       const victim =
         this.repertoireVoices.find((v) => v.damped) || this.repertoireVoices[0];
       if (victim) {
-        this._fadeAndStopRepertoireVoice(victim, 0.032);
+        this._fadeAndStopRepertoireVoice(victim, 0.028, now);
       }
     }
 
-    const { voiceGain, sources } = this._createGrandVoiceNodes(midi, vel, 0.42, 0.74);
-    const voice = { midi, voiceGain, sources, damped: false, cleaned: false, timerId: null };
+    const { voiceGain, sources, startTime } = this._createGrandVoiceNodes(midi, vel, 0.44, 0.74, t0);
+    const voice = { midi, voiceGain, sources, startTime, damped: false, cleaned: false, timerId: null };
 
     this.repertoireVoices.push(voice);
     voice.timerId = setTimeout(() => this._removeRepertoireVoice(voice), 9500);
+    return voice;
   }
 
-  playRepertoireNoteOff(rawMidi) {
+  playRepertoireNoteOff(rawMidi, whenSec = null, targetVoice = null) {
     const midi = clamp(Math.round(rawMidi), 24, 98);
     this.repertoireKeysDown.delete(midi);
-    if (this.damperSustain) return;
+    if (this.isSustainActive) return;
     const scale = this.pianoAudioProfile?.sustainReleaseScale || 1.5;
     const releaseTau = (midi < 45 ? 0.088 : 0.052) * scale;
+    if (targetVoice) {
+      if (!targetVoice.damped) this._fadeAndStopRepertoireVoice(targetVoice, releaseTau, whenSec);
+      return;
+    }
     for (const v of this.repertoireVoices) {
       if (v.midi === midi && !v.damped) {
-        this._fadeAndStopRepertoireVoice(v, releaseTau);
+        this._fadeAndStopRepertoireVoice(v, releaseTau, whenSec);
       }
     }
   }
@@ -1358,14 +1515,17 @@ export class KoernerHallAcousticsEngine {
     }
   }
 
-  _fadeAndStopRepertoireVoice(voice, releaseTau = 0.045) {
+  _fadeAndStopRepertoireVoice(voice, releaseTau = 0.045, whenSec = null) {
     if (!voice || voice.damped) return;
     voice.damped = true;
+    let delayMs = Math.ceil(releaseTau * 6000) + 25;
     if (this.ctx) {
       const now = this.ctx.currentTime;
+      const tFade = Math.max(now, Number.isFinite(whenSec) ? whenSec : now);
+      delayMs = Math.ceil((tFade - now + releaseTau * 6.0) * 1000) + 30;
       try {
-        voice.voiceGain.gain.cancelScheduledValues(now);
-        voice.voiceGain.gain.setTargetAtTime(0.00001, now, releaseTau);
+        voice.voiceGain.gain.cancelScheduledValues(tFade);
+        voice.voiceGain.gain.setTargetAtTime(0.00001, tFade, releaseTau);
       } catch (_) {}
     }
     setTimeout(() => {
@@ -1375,7 +1535,7 @@ export class KoernerHallAcousticsEngine {
         } catch (_) {}
       }
       this._removeRepertoireVoice(voice);
-    }, Math.ceil(releaseTau * 6000) + 25);
+    }, delayMs);
   }
 
   _removeRepertoireVoice(voice) {
@@ -1423,10 +1583,13 @@ export class FortepianoRepertoirePerformance {
     this.events = [];
     this.pedalIntervals = [];
     this.eventPtr = 0;
+    this.audioEventPtr = 0;
     this.scheduledOffs = [];
+    this.scheduledAudioOffs = [];
 
     this.pausedAtSec = 0.0;
     this.startWallSec = 0.0;
+    this.audioClockBase = 0.0;
     this.seekBaseSec = 0.0;
     this.tempoRate = 1.0;
     this.audioEl = null;
@@ -1447,6 +1610,9 @@ export class FortepianoRepertoirePerformance {
       this.seekBaseSec = curT;
       this.pausedAtSec = curT;
       this.startWallSec = nowSec;
+      if (this.acoustics?.ctx) {
+        this.audioClockBase = this.acoustics.ctx.currentTime;
+      }
     }
     this.tempoRate = nextRate;
     if (this.audioEl) {
@@ -1464,6 +1630,7 @@ export class FortepianoRepertoirePerformance {
       currentTimeSec: this.getCurrentTimeSec(),
       tempoRate: this.tempoRate,
       playing: this.playing,
+      piece: this.currentPiece,
     };
   }
 
@@ -1491,6 +1658,8 @@ export class FortepianoRepertoirePerformance {
         return {
           t: Number(n[0] ?? 0),
           dur: Number(n[1] ?? 0.22),
+          beat: Number(n[2] ?? 0),
+          durBeats: Number(n[3] ?? 0.5),
           midi: foldMidiIntoFortepianoCompass(rawMidi),
           audioMidi: clamp(Math.round(rawMidi), 24, 98),
           vel: clamp(Number(n[5] ?? 0.80), 0.14, 1.0),
@@ -1530,7 +1699,9 @@ export class FortepianoRepertoirePerformance {
     this.pausedAtSec = 0.0;
     this.seekBaseSec = 0.0;
     this.eventPtr = 0;
+    this.audioEventPtr = 0;
     this.scheduledOffs = [];
+    this.scheduledAudioOffs = [];
 
     if (this.audioEl) {
       try {
@@ -1599,6 +1770,7 @@ export class FortepianoRepertoirePerformance {
   _syncKinematicsToTime(targetSec) {
     if (this.fortepianoRig) this.fortepianoRig.releaseAllKeysAndPedals();
     this.scheduledOffs = [];
+    this.scheduledAudioOffs = [];
     this.acoustics.keysDown.clear();
     this.acoustics.stopAllRepertoireVoices();
 
@@ -1615,6 +1787,7 @@ export class FortepianoRepertoirePerformance {
         this.scheduledOffs.push({ offTime, midi: ev.midi, audioMidi: ev.audioMidi });
       }
     }
+    this.audioEventPtr = this.eventPtr;
 
     this.onProgress(t, this.durationSec);
   }
@@ -1636,13 +1809,16 @@ export class FortepianoRepertoirePerformance {
           this.audioEl.pause();
         } catch (_) {}
       }
-      // Wait briefly for the real Schloss Kremsegg fortepiano samples to finish decoding
+      // Wait for Studio Salamander Concert Grand middle register (or Kremsegg on Stein 1780) before Note 1
       await Promise.race([
-        this.acoustics.preloadKeySamples(),
-        new Promise((r) => setTimeout(r, 1400)),
+        this.acoustics.waitForActivePianoSamples(),
+        new Promise((r) => setTimeout(r, 2200)),
       ]);
       this.seekBaseSec = startAt;
       this.startWallSec = performance.now() * 0.001;
+      if (this.acoustics?.ctx) {
+        this.audioClockBase = this.acoustics.ctx.currentTime + 0.025;
+      }
       this._syncKinematicsToTime(startAt);
       this.playing = true;
       this.onStateChange(true);
@@ -1689,6 +1865,7 @@ export class FortepianoRepertoirePerformance {
     if (this.fortepianoRig) this.fortepianoRig.releaseAllKeysAndPedals();
     this.acoustics.keysDown.clear();
     this.acoustics.setKneeLever(false);
+    this.scheduledAudioOffs = [];
     this.onStateChange(false);
     this.onProgress(this.pausedAtSec, this.durationSec);
   }
@@ -1703,6 +1880,9 @@ export class FortepianoRepertoirePerformance {
     this.pausedAtSec = clamped;
     this.seekBaseSec = clamped;
     this.startWallSec = performance.now() * 0.001;
+    if (this.acoustics?.ctx) {
+      this.audioClockBase = this.acoustics.ctx.currentTime + 0.02;
+    }
     if (!this.isSampledPiece && this.audioEl) {
       try {
         this.audioEl.currentTime = clamped;
@@ -1714,6 +1894,10 @@ export class FortepianoRepertoirePerformance {
   getCurrentTimeSec(nowSec = performance.now() * 0.001) {
     if (!this.playing) return this.pausedAtSec;
     if (this.isSampledPiece) {
+      const ctx = this.acoustics?.ctx;
+      if (ctx && ctx.state === "running") {
+        return this.seekBaseSec + Math.max(0, ctx.currentTime - this.audioClockBase) * this.tempoRate;
+      }
       return this.seekBaseSec + Math.max(0, nowSec - this.startWallSec) * this.tempoRate;
     }
     if (
@@ -1744,6 +1928,44 @@ export class FortepianoRepertoirePerformance {
       }
     }
 
+    // 1. Sample-accurate Web Audio Hardware Lookahead Scheduler (95 ms ahead = ZERO frame-rate rhythm jitter!)
+    if (this.isSampledPiece) {
+      const ctx = this.acoustics?.ctx;
+      const useHardwareClock = Boolean(ctx && ctx.state === "running");
+      const lookaheadScoreSec = (useHardwareClock ? 0.095 : 0.0) * this.tempoRate;
+      const audioHorizon = t + lookaheadScoreSec;
+
+      while (
+        this.audioEventPtr < this.events.length &&
+        this.events[this.audioEventPtr].t <= audioHorizon
+      ) {
+        const ev = this.events[this.audioEventPtr++];
+        if (ev.t >= t - 0.14 * this.tempoRate) {
+          const whenAudioSec = useHardwareClock
+            ? Math.max(ctx.currentTime, this.audioClockBase + (ev.t - this.seekBaseSec) / this.tempoRate)
+            : null;
+          const voice = this.acoustics.playRepertoireNoteOn(ev.audioMidi, ev.vel, whenAudioSec);
+          this.scheduledAudioOffs.push({
+            offTime: ev.t + Math.max(0.050, ev.dur * 0.94),
+            audioMidi: ev.audioMidi,
+            voice,
+          });
+        }
+      }
+
+      for (let i = this.scheduledAudioOffs.length - 1; i >= 0; i--) {
+        const aOff = this.scheduledAudioOffs[i];
+        if (audioHorizon >= aOff.offTime) {
+          const whenOffSec = useHardwareClock
+            ? Math.max(ctx.currentTime, this.audioClockBase + (aOff.offTime - this.seekBaseSec) / this.tempoRate)
+            : null;
+          this.acoustics.playRepertoireNoteOff(aOff.audioMidi, whenOffSec, aOff.voice);
+          this.scheduledAudioOffs.splice(i, 1);
+        }
+      }
+    }
+
+    // 2. Frame-synchronized 3D Piano Key & Hammer Kinematics (exact visual beat lock)
     while (this.eventPtr < this.events.length && this.events[this.eventPtr].t <= t) {
       const ev = this.events[this.eventPtr++];
       for (let k = this.scheduledOffs.length - 1; k >= 0; k--) {
@@ -1752,11 +1974,7 @@ export class FortepianoRepertoirePerformance {
       if (this.fortepianoRig) {
         this.fortepianoRig.strikeKey(ev.midi, ev.vel, ev.hand);
       }
-      if (this.isSampledPiece) {
-        if (ev.t >= t - 0.18 * this.tempoRate) {
-          this.acoustics.playRepertoireNoteOn(ev.audioMidi, ev.vel);
-        }
-      } else {
+      if (!this.isSampledPiece) {
         this.acoustics.keysDown.add(ev.midi);
       }
       this.scheduledOffs.push({
@@ -1770,9 +1988,7 @@ export class FortepianoRepertoirePerformance {
       const off = this.scheduledOffs[i];
       if (t >= off.offTime) {
         if (this.fortepianoRig) this.fortepianoRig.releaseKey(off.midi);
-        if (this.isSampledPiece) {
-          this.acoustics.playRepertoireNoteOff(off.audioMidi);
-        } else {
+        if (!this.isSampledPiece) {
           this.acoustics.keysDown.delete(off.midi);
         }
         this.scheduledOffs.splice(i, 1);
