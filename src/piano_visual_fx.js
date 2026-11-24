@@ -376,6 +376,10 @@ function parsePieceScoreSpec(keySigText = "") {
     num = 3;
     den = 4;
     beatsPerBar = 3;
+  } else if (txt.includes("2/2") || txt.includes("alla breve")) {
+    num = 2;
+    den = 2;
+    beatsPerBar = 4;
   } else if (txt.includes("2/4")) {
     num = 2;
     den = 4;
@@ -392,12 +396,13 @@ function parsePieceScoreSpec(keySigText = "") {
   else if (txt.includes("c♯ minor") || txt.includes("c# minor") || txt.includes("до-диез")) fifths = 4;
   else if (txt.includes("a major") || txt.includes("ля мажор")) fifths = 3;
   else if (txt.includes("b minor") || txt.includes("си минор") || txt.includes("d major") || txt.includes("ре мажор")) fifths = 2;
-  else if (txt.includes("g major") || txt.includes("e minor") || txt.includes("соль мажор")) fifths = 1;
+  else if (txt.includes("g major") || txt.includes("e minor") || txt.includes("ми минор") || txt.includes("соль мажор")) fifths = 1;
+  else if (txt.includes("g♭ major") || txt.includes("gb major") || txt.includes("соль-бемоль")) fifths = -6;
   else if (txt.includes("d♭ major") || txt.includes("db major") || txt.includes("ре-бемоль") || txt.includes("b♭ minor") || txt.includes("bb minor") || txt.includes("си-бемоль минор")) fifths = -5;
   else if (txt.includes("f minor") || txt.includes("фа минор")) fifths = -4;
   else if (txt.includes("e♭ major") || txt.includes("eb major") || txt.includes("ми-бемоль") || txt.includes("c minor")) fifths = -3;
   else if (txt.includes("b♭ major") || txt.includes("g minor") || txt.includes("соль минор")) fifths = -2;
-  else if (txt.includes("d minor") || txt.includes("ре минор") || txt.includes("f major")) fifths = -1;
+  else if (txt.includes("d minor") || txt.includes("ре минор") || txt.includes("f major") || txt.includes("фа мажор")) fifths = -1;
   else fifths = 0;
 
   // Build map of diatonic letter (0..6) -> key accidental (-1, 0, +1)
@@ -667,8 +672,8 @@ export function createMusicDeskScore(pianoAnchor, rigNodes, maxAniso = 4, isMobi
 
   function setHistoricalOffset(isHistorical) {
     // On Stein 1780, offset book cleanly IN FRONT of the historical wooden Notenpult rack
-    // On modern grands, sit flush in front of the bespoke carved brand music desk (z = -0.324)
-    scoreGroup.position.z = isHistorical ? -0.252 : -0.292;
+    // On scaled modern 88-key grands (1.08x Z), sit flush in front of the bespoke carved brand music desk
+    scoreGroup.position.z = isHistorical ? -0.252 : -0.316;
   }
 
   function stepToY(step, isTreble, trebleTopY, bassTopY, gap) {
@@ -1302,18 +1307,23 @@ export function createMusicDeskScore(pianoAnchor, rigNodes, maxAniso = 4, isMobi
 // ============================================================================
 // 3. DUAL-MODE 3D NOTE ANIMATION ENGINE (Falling 3D Ribbons + Acoustic Particles)
 // ============================================================================
-export function createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL = false) {
+export function createPianoNoteVisualizer(
+  pianoAnchor,
+  rigNodes,
+  isSoftwareGL = false,
+  modern88Anchors = null
+) {
   const vizGroup = new THREE.Group();
   vizGroup.name = "Piano_3D_NoteVisualizer";
   pianoAnchor.add(vizGroup);
 
-  // Calibrate exact local (x, y, z) coordinates of all 61 keys in pianoAnchor local space
+  // Calibrate exact local (x, y, z) coordinates of all 61 historical keys in pianoAnchor local space
   pianoAnchor.updateMatrixWorld(true);
   _invAnchor.copy(pianoAnchor.matrixWorld).invert();
 
-  const keyAnchors = new Array(FORTEPIANO_TOTAL_KEYS);
-  let avgKeyY = 0.78;
-  let avgKeyZ = 0.08;
+  const historical61Anchors = new Array(FORTEPIANO_TOTAL_KEYS);
+  let avgKeyY61 = 0.78;
+  let avgKeyZ61 = 0.08;
   let validCount = 0;
 
   for (let i = 0; i < FORTEPIANO_TOTAL_KEYS; i++) {
@@ -1330,15 +1340,15 @@ export function createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL = 
         const frontZ = Math.max(minL.z, maxL.z);
         const backZ = Math.min(minL.z, maxL.z);
         const kz = isSharp ? backZ + (frontZ - backZ) * 0.64 : frontZ - 0.032;
-        keyAnchors[i] = { x: cx, y: topY, z: kz, isSharp };
-        avgKeyY += topY;
-        avgKeyZ += kz;
+        historical61Anchors[i] = { x: cx, y: topY, z: kz, isSharp };
+        avgKeyY61 += topY;
+        avgKeyZ61 += kz;
         validCount++;
         continue;
       }
     }
     const frac = i / Math.max(1, FORTEPIANO_TOTAL_KEYS - 1);
-    keyAnchors[i] = {
+    historical61Anchors[i] = {
       x: -0.42 + frac * 0.84,
       y: 0.785 + (isSharp ? 0.012 : 0),
       z: isSharp ? 0.03 : 0.085,
@@ -1346,9 +1356,24 @@ export function createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL = 
     };
   }
   if (validCount > 0) {
-    avgKeyY /= validCount;
-    avgKeyZ /= validCount;
+    avgKeyY61 /= validCount;
+    avgKeyZ61 /= validCount;
   }
+
+  let avgKeyY88 = avgKeyY61;
+  let avgKeyZ88 = avgKeyZ61;
+  if (Array.isArray(modern88Anchors) && modern88Anchors.length === 88) {
+    let sy = 0;
+    let sz = 0;
+    for (let i = 0; i < 88; i++) {
+      sy += modern88Anchors[i].y;
+      sz += modern88Anchors[i].z;
+    }
+    avgKeyY88 = sy / 88;
+    avgKeyZ88 = sz / 88;
+  }
+
+  let is88KeyMode = Boolean(Array.isArray(modern88Anchors) && modern88Anchors.length === 88);
 
   // --- A. FALLING 3D PIANO-ROLL NOTE RIBBONS (InstancedMesh pool) ---
   const MAX_RIBBONS = isSoftwareGL ? 140 : 240;
@@ -1377,9 +1402,21 @@ export function createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL = 
     toneMapped: false,
   });
   const guideRail = new THREE.Mesh(railGeo, railMat);
-  guideRail.position.set(0.0, avgKeyY + 0.018, avgKeyZ + 0.012);
+  guideRail.position.set(
+    0.0,
+    (is88KeyMode ? avgKeyY88 : avgKeyY61) + 0.018,
+    (is88KeyMode ? avgKeyZ88 : avgKeyZ61) + 0.012
+  );
+  guideRail.scale.x = is88KeyMode ? 1.35 : 1.0;
   guideRail.visible = false;
   vizGroup.add(guideRail);
+
+  function setKeyboardMode(use88Keys) {
+    is88KeyMode = Boolean(use88Keys && Array.isArray(modern88Anchors) && modern88Anchors.length === 88);
+    guideRail.scale.x = is88KeyMode ? 1.35 : 1.0;
+    guideRail.position.y = (is88KeyMode ? avgKeyY88 : avgKeyY61) + 0.018;
+    guideRail.position.z = (is88KeyMode ? avgKeyZ88 : avgKeyZ61) + 0.012;
+  }
 
   // --- B. LUMINOUS ACOUSTIC PARTICLES & SPARKS (InstancedMesh pool) ---
   const MAX_PARTICLES = isSoftwareGL ? 140 : 260;
@@ -1423,8 +1460,8 @@ export function createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL = 
   const pColor = new Float32Array(MAX_PARTICLES * 3);
   let pCursor = 0;
 
-  const keyGlowEnergy = new Float32Array(FORTEPIANO_TOTAL_KEYS);
-  const keyGlowHand = new Uint8Array(FORTEPIANO_TOTAL_KEYS); // 1 = RH (gold), 0 = LH (sapphire)
+  const keyGlowEnergy = new Float32Array(88);
+  const keyGlowHand = new Uint8Array(88); // 1 = RH (gold), 0 = LH (sapphire)
 
   let fallingEnabled = false;
   let particlesEnabled = false;
@@ -1481,14 +1518,28 @@ export function createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL = 
     syncModeFlags();
   }
 
-  function spawnParticlesForKey(keyIdx, velocity = 0.75, hand = "RH", sustainDown = false) {
-    if (keyIdx < 0 || keyIdx >= FORTEPIANO_TOTAL_KEYS) return;
-    const isRH = hand === "RH" || (hand !== "LH" && FORTEPIANO_MIN_MIDI + keyIdx >= 60);
+  function resolveKeyIndexForMidi(rawMidi) {
+    let m = Math.round(rawMidi);
+    if (is88KeyMode) {
+      if (m < 21) m = 21;
+      else if (m > 108) m = 108;
+      return m - 21;
+    }
+    while (m < FORTEPIANO_MIN_MIDI) m += 12;
+    while (m > FORTEPIANO_MIN_MIDI + FORTEPIANO_TOTAL_KEYS - 1) m -= 12;
+    return m - FORTEPIANO_MIN_MIDI;
+  }
+
+  function spawnParticlesForKey(midi, velocity = 0.75, hand = "RH", sustainDown = false) {
+    const activeAnchors = is88KeyMode ? modern88Anchors : historical61Anchors;
+    const keyIdx = resolveKeyIndexForMidi(midi);
+    if (keyIdx < 0 || keyIdx >= activeAnchors.length) return;
+    const isRH = hand === "RH" || (hand !== "LH" && midi >= 60);
     keyGlowEnergy[keyIdx] = Math.min(1.0, Math.max(keyGlowEnergy[keyIdx], 0.55 + velocity * 0.55));
     keyGlowHand[keyIdx] = isRH ? 1 : 0;
 
     if (!particlesEnabled) return;
-    const anchor = keyAnchors[keyIdx];
+    const anchor = activeAnchors[keyIdx];
     const burstCount = isSoftwareGL ? 2 : Math.min(6, Math.max(3, Math.round(velocity * 5)));
     const baseCol = isRH ? (anchor.isSharp ? COL_RH_SHARP : COL_RH_NAT) : (anchor.isSharp ? COL_LH_SHARP : COL_LH_NAT);
 
@@ -1534,6 +1585,7 @@ export function createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL = 
       const lookaheadSec = 2.1 * tempoRate; // 2.1 visual seconds of crisp cascade
       const fallHeightM = 0.42; // compact height well clear of the music desk behind
       const events = perfState.events;
+      const activeAnchors = is88KeyMode ? modern88Anchors : historical61Anchors;
 
       // Binary search for first event whose end > curTime - 0.05
       let lo = 0;
@@ -1551,9 +1603,9 @@ export function createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL = 
         const evEnd = ev.t + Math.max(0.08, ev.dur);
         if (evEnd < curTime - 0.02) continue;
 
-        const keyIdx = ev.midi - FORTEPIANO_MIN_MIDI;
-        if (keyIdx < 0 || keyIdx >= FORTEPIANO_TOTAL_KEYS) continue;
-        const anchor = keyAnchors[keyIdx];
+        const keyIdx = resolveKeyIndexForMidi(ev.audioMidi ?? ev.midi);
+        if (keyIdx < 0 || keyIdx >= activeAnchors.length) continue;
+        const anchor = activeAnchors[keyIdx];
 
         const timeToHitStart = (ev.t - curTime) / tempoRate;
         const timeToHitEnd = (evEnd - curTime) / tempoRate;
@@ -1563,7 +1615,9 @@ export function createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL = 
         if (yTop <= 0.0 || yBot >= fallHeightM) continue;
 
         const isPlayingNow = curTime >= ev.t && curTime <= evEnd;
-        const barW = anchor.isSharp ? 0.0082 : 0.0132;
+        const barW = is88KeyMode
+          ? (anchor.isSharp ? 0.0112 : 0.0180)
+          : (anchor.isSharp ? 0.0082 : 0.0132);
         const barD = anchor.isSharp ? 0.009 : 0.010;
 
         _dummy.position.set(
@@ -1662,6 +1716,7 @@ export function createPianoNoteVisualizer(pianoAnchor, rigNodes, isSoftwareGL = 
 
   return {
     group: vizGroup,
+    setKeyboardMode,
     setMode,
     getMode: () => mode,
     setFallingEnabled,

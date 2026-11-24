@@ -16,8 +16,8 @@
 import * as THREE from "three";
 import { HISTORICAL_REPERTOIRE } from "./fortepiano_repertoire_data.js";
 import {
-  FORTEPIANO_MIN_MIDI,
-  FORTEPIANO_MAX_MIDI,
+  CONCERT_GRAND_MIN_MIDI,
+  CONCERT_GRAND_MAX_MIDI,
   foldMidiIntoFortepianoCompass,
 } from "./fortepiano_stage_rig.js";
 import { DEFAULT_PIANO_MODEL_ID, getPianoModel } from "./piano_models.js";
@@ -77,6 +77,12 @@ const PIECE_SHORT_LABELS = {
   satie_gymnopedie_no1: "Гимнопедия № 1 · Сати ▾",
   mozart_rondo_alla_turca_k331: "Турецкий марш · Моцарт ▾",
   chopin_waltz_c_sharp_minor_op64_no2: "Вальс Op. 64 № 2 · Шопен ▾",
+  schumann_traumerei_op15_no7: "Грёзы (Träumerei) · Шуман ▾",
+  chopin_prelude_e_minor_op28_no4: "Прелюдия № 4 ми минор · Шопен ▾",
+  debussy_fille_aux_cheveux_de_lin: "Девушка с волосами цвета льна · Дебюсси ▾",
+  liszt_consolation_no3_s172: "Утешение № 3 · Лист ▾",
+  bach_air_on_g_string_bwv1068: "Ария (Air) · Бах ▾",
+  mozart_sonata_11_k331_mvt1: "Соната № 11 (ч. I) · Моцарт ▾",
   sakamoto_drowning_love_chasing_kou: "Drowning Love · Сакамото ▾",
   silo_meaningful_love: "Meaningful Love · Неоклассика ▾",
 };
@@ -453,6 +459,71 @@ export class KoernerHallAcousticsEngine {
     this.lidAngleShelf.connect(this.hallWarmthShelf);
     this.hallWarmthShelf.connect(this.unaCordaGain);
     this.unaCordaGain.connect(this.spatialBus);
+
+    // --- 0B. ZERO-PER-NOTE-CPU STEREO SYMPATHETIC STRING-BED PEDAL RESONANCE BUS ---
+    // Activates smoothly whenever the damper pedal lifts all dampers off the soundboard,
+    // blooming authentic Salamander harmonics across a stereo cross-coupled string cavity.
+    const sympBandpass = ctx.createBiquadFilter();
+    sympBandpass.type = "bandpass";
+    sympBandpass.frequency.value = 680.0;
+    sympBandpass.Q.value = 0.42;
+
+    const sympDelayL = ctx.createDelay(0.1);
+    sympDelayL.delayTime.value = 0.0193;
+    const sympDelayR = ctx.createDelay(0.1);
+    sympDelayR.delayTime.value = 0.0287;
+
+    const sympFbL = ctx.createGain();
+    sympFbL.gain.value = 0.32;
+    const sympFbR = ctx.createGain();
+    sympFbR.gain.value = 0.32;
+
+    const sympWarmLP = ctx.createBiquadFilter();
+    sympWarmLP.type = "lowpass";
+    sympWarmLP.frequency.value = 2300.0;
+    sympWarmLP.Q.value = 0.5;
+
+    const sympMerger = ctx.createChannelMerger(2);
+    this.sympatheticPedalGain = ctx.createGain();
+    this.sympatheticPedalGain.gain.value = 0.0001;
+
+    this.sourceBus.connect(sympBandpass);
+    sympBandpass.connect(sympDelayL);
+    sympBandpass.connect(sympDelayR);
+    sympDelayL.connect(sympWarmLP);
+    sympDelayR.connect(sympWarmLP);
+    sympWarmLP.connect(sympFbL);
+    sympWarmLP.connect(sympFbR);
+    sympFbL.connect(sympDelayR);
+    sympFbR.connect(sympDelayL);
+    sympDelayL.connect(sympMerger, 0, 0);
+    sympDelayR.connect(sympMerger, 0, 1);
+    sympMerger.connect(this.sympatheticPedalGain);
+    this.sympatheticPedalGain.connect(this.spatialBus);
+
+    // --- 0C. ALIQUOT 4TH-STRING & DUPLEX HARMONIC SHIMMER BUS (Blüthner / Fazioli / Crystal) ---
+    const aliquotHP = ctx.createBiquadFilter();
+    aliquotHP.type = "highpass";
+    aliquotHP.frequency.value = 1680.0;
+    aliquotHP.Q.value = 0.7;
+
+    const aliquotPeak = ctx.createBiquadFilter();
+    aliquotPeak.type = "peaking";
+    aliquotPeak.frequency.value = 3350.0;
+    aliquotPeak.Q.value = 1.1;
+    aliquotPeak.gain.value = 4.2;
+
+    const aliquotDelay = ctx.createDelay(0.05);
+    aliquotDelay.delayTime.value = 0.0114;
+
+    this.aliquotGain = ctx.createGain();
+    this.aliquotGain.gain.value = clamp((pAudio.aliquotMix || 0.0) * 0.34, 0.0, 0.14);
+
+    this.sourceBus.connect(aliquotHP);
+    aliquotHP.connect(aliquotPeak);
+    aliquotPeak.connect(aliquotDelay);
+    aliquotDelay.connect(this.aliquotGain);
+    this.aliquotGain.connect(this.spatialBus);
 
     // --- A. PHASE-COHERENT DIRECT PATH (Zero DelayNodes = 0.00 cents Doppler / record-scratch!) ---
     const splitter = ctx.createChannelSplitter(2);
@@ -1127,9 +1198,26 @@ export class KoernerHallAcousticsEngine {
     return Boolean(this.damperSustain || this.manualSustain);
   }
 
+  _resolveCompassMidi(rawMidi) {
+    if (this.pianoModelId === "stein_1780") {
+      return foldMidiIntoFortepianoCompass(rawMidi);
+    }
+    return clamp(Math.round(rawMidi), CONCERT_GRAND_MIN_MIDI, CONCERT_GRAND_MAX_MIDI);
+  }
+
+  _refreshSympatheticPedalBus() {
+    if (!this.graphReady || !this.ctx || !this.sympatheticPedalGain) return;
+    const now = this.ctx.currentTime;
+    const sympMix = this.pianoAudioProfile?.sympatheticMix ?? 0.26;
+    const target = this.isSustainActive ? clamp(sympMix * 0.28, 0.02, 0.14) : 0.0001;
+    const tau = this.isSustainActive ? 0.07 : 0.18;
+    this.sympatheticPedalGain.gain.setTargetAtTime(target, now, tau);
+  }
+
   isDamperLifted(midi) {
-    const m = foldMidiIntoFortepianoCompass(midi);
-    // All 61 courses (F1-f3, MIDI 29..89) have individual overhead dampers
+    const m = this._resolveCompassMidi(midi);
+    // Uppermost concert grand treble notes (MIDI >= 91) are naturally undamped on real grand pianos
+    if (this.pianoModelId !== "stein_1780" && m >= 91) return true;
     if (this.isSustainActive) return true;
     if (this.keysDown.has(m)) return true;
     return false;
@@ -1137,6 +1225,7 @@ export class KoernerHallAcousticsEngine {
 
   setKneeLever(engaged) {
     this.damperSustain = Boolean(engaged);
+    this._refreshSympatheticPedalBus();
     if (!this.isSustainActive) {
       for (const m of this.activeVoices.keys()) {
         this._evaluateDampingForMidi(m);
@@ -1147,6 +1236,7 @@ export class KoernerHallAcousticsEngine {
 
   setManualSustain(engaged) {
     this.manualSustain = Boolean(engaged);
+    this._refreshSympatheticPedalBus();
     if (!this.isSustainActive) {
       for (const m of this.activeVoices.keys()) {
         this._evaluateDampingForMidi(m);
@@ -1264,6 +1354,14 @@ export class KoernerHallAcousticsEngine {
     if (this.voiceReverbScale) {
       this.voiceReverbScale.gain.setTargetAtTime(pAudio.reverbScale || 1.25, now, slew * 0.4);
     }
+    if (this.aliquotGain) {
+      this.aliquotGain.gain.setTargetAtTime(
+        clamp((pAudio.aliquotMix || 0.0) * 0.34, 0.0, 0.14),
+        now,
+        slew * 0.4
+      );
+    }
+    this._refreshSympatheticPedalBus();
     return model;
   }
 
@@ -1290,8 +1388,8 @@ export class KoernerHallAcousticsEngine {
     const bufMp = this.sampleBuffers.get(`${refMidi}_mp`);
     const bufF = this.sampleBuffers.get(`${refMidi}_f`);
 
-    // Pitch-dependent felt warmth: low notes have rounder upper harmonics, treble sings smoothly
-    const registerNorm = clamp((midi - 24) / 68.0, 0.0, 1.0);
+    // Pitch-dependent felt warmth across the full 88-key compass (A0 = 21 .. C8 = 108)
+    const registerNorm = clamp((midi - CONCERT_GRAND_MIN_MIDI) / 87.0, 0.0, 1.0);
     const registerWarmth = 0.76 + registerNorm * 0.52;
     const salFilterBoost = salBuf ? 1.28 : 1.0;
     const peakCutoff = clamp(
@@ -1311,7 +1409,7 @@ export class KoernerHallAcousticsEngine {
     filter.frequency.exponentialRampToValueAtTime(settledCutoff, t0 + 0.56);
 
     const panner = this.ctx.createStereoPanner();
-    panner.pan.value = clamp(((midi - 29) / 60.0 - 0.5) * panSpread, -0.78, 0.78);
+    panner.pan.value = clamp(((midi - CONCERT_GRAND_MIN_MIDI) / 87.0 - 0.5) * panSpread, -0.78, 0.78);
 
     const voiceGain = this.ctx.createGain();
     const amp = Math.pow(vel, 1.35) * ampScale * (salBuf ? 1.24 : 1.02);
@@ -1387,8 +1485,8 @@ export class KoernerHallAcousticsEngine {
   }
 
   playInteractiveNoteOn(rawMidi, velocity = 0.80) {
-    const midi = foldMidiIntoFortepianoCompass(rawMidi);
-    if (midi < FORTEPIANO_MIN_MIDI || midi > FORTEPIANO_MAX_MIDI) return;
+    const midi = this._resolveCompassMidi(rawMidi);
+    if (midi < CONCERT_GRAND_MIN_MIDI || midi > CONCERT_GRAND_MAX_MIDI) return;
     this.keysDown.add(midi);
     this.ensureContext();
     this.resumeNonBlocking();
@@ -1405,7 +1503,7 @@ export class KoernerHallAcousticsEngine {
   }
 
   playInteractiveNoteOff(rawMidi) {
-    const midi = foldMidiIntoFortepianoCompass(rawMidi);
+    const midi = this._resolveCompassMidi(rawMidi);
     this.keysDown.delete(midi);
     this._evaluateDampingForMidi(midi);
   }
@@ -1451,7 +1549,7 @@ export class KoernerHallAcousticsEngine {
   // POLYPHONIC CONCERT GRAND REPERTOIRE VOICE ENGINE
   // ==========================================================================
   playRepertoireNoteOn(rawMidi, velocity = 0.72, whenSec = null) {
-    const midi = clamp(Math.round(rawMidi), 24, 98);
+    const midi = clamp(Math.round(rawMidi), CONCERT_GRAND_MIN_MIDI, CONCERT_GRAND_MAX_MIDI);
     this.repertoireKeysDown.add(midi);
     this.ensureContext();
     this.resumeNonBlocking();
@@ -1488,9 +1586,11 @@ export class KoernerHallAcousticsEngine {
   }
 
   playRepertoireNoteOff(rawMidi, whenSec = null, targetVoice = null) {
-    const midi = clamp(Math.round(rawMidi), 24, 98);
+    const midi = clamp(Math.round(rawMidi), CONCERT_GRAND_MIN_MIDI, CONCERT_GRAND_MAX_MIDI);
     this.repertoireKeysDown.delete(midi);
     if (this.isSustainActive) return;
+    // Uppermost treble strings (MIDI >= 91) ring freely without dampers on concert grands
+    if (this.pianoModelId !== "stein_1780" && midi >= 91) return;
     const scale = this.pianoAudioProfile?.sustainReleaseScale || 1.5;
     const releaseTau = (midi < 45 ? 0.088 : 0.052) * scale;
     if (targetVoice) {
@@ -1655,13 +1755,14 @@ export class FortepianoRepertoirePerformance {
       .map((n) => {
         const rawMidi = Number(n[4] ?? 60);
         const handTag = n[6] === "LH" || n[6] === "RH" ? n[6] : rawMidi >= 60 ? "RH" : "LH";
+        const exactMidi = clamp(Math.round(rawMidi), CONCERT_GRAND_MIN_MIDI, CONCERT_GRAND_MAX_MIDI);
         return {
           t: Number(n[0] ?? 0),
           dur: Number(n[1] ?? 0.22),
           beat: Number(n[2] ?? 0),
           durBeats: Number(n[3] ?? 0.5),
-          midi: foldMidiIntoFortepianoCompass(rawMidi),
-          audioMidi: clamp(Math.round(rawMidi), 24, 98),
+          midi: exactMidi,
+          audioMidi: exactMidi,
           vel: clamp(Number(n[5] ?? 0.80), 0.14, 1.0),
           hand: handTag,
         };

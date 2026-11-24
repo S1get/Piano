@@ -26,6 +26,16 @@ import {
   createPianoNoteVisualizer,
 } from "./piano_visual_fx.js";
 import { buildBrandArchitecture } from "./piano_brand_architecture.js";
+import {
+  buildModern88KeyConcertAction,
+  CONCERT_GRAND_MIN_MIDI,
+  CONCERT_GRAND_MAX_MIDI,
+  CONCERT_GRAND_TOTAL_KEYS,
+  MODERN_CASE_SCALE_X,
+  MODERN_CASE_SCALE_Z,
+} from "./modern_88key_action.js";
+
+export { CONCERT_GRAND_MIN_MIDI, CONCERT_GRAND_MAX_MIDI, CONCERT_GRAND_TOTAL_KEYS };
 
 export const FORTEPIANO_STAGE_ANCHOR_POS = new THREE.Vector3(0.84, 0.96, 3.65);
 export const FORTEPIANO_STAGE_ROT_Y = Math.PI / 2;
@@ -1756,6 +1766,20 @@ export async function loadFortepianoStageRig({
   }
 
   let keyGlowEnabled = false;
+  let currentKeyStyle = DEFAULT_KEY_STYLE;
+  let currentModelId = DEFAULT_PIANO_MODEL_ID;
+  let isCurrentHistorical = false;
+
+  pianoAnchor.updateMatrixWorld(true);
+
+  // Full 88-Key Concert Grand Keyboard, Hammers, Dampers & Overstrung Strings (measured BEFORE scaling root)
+  const modern88Action = buildModern88KeyConcertAction(
+    pianoAnchor,
+    rigNodes,
+    stageFortepianoEnvRT.texture,
+    isMobile
+  );
+
   function clearAllKeyEmissives() {
     for (let i = 0; i < FORTEPIANO_TOTAL_KEYS; i++) {
       const mats = keyMatRefs[i];
@@ -1767,6 +1791,7 @@ export async function loadFortepianoStageRig({
         }
       }
     }
+    modern88Action.clearAllKeyEmissives();
   }
   function setKeyGlowEnabled(enabled) {
     keyGlowEnabled = Boolean(enabled);
@@ -1776,15 +1801,18 @@ export async function loadFortepianoStageRig({
     onWakeRender();
   }
 
-  pianoAnchor.updateMatrixWorld(true);
-
   // Brand-Unique 3D Architecture (Fallboard Logos, Cast-Iron Harps, Concert Tripods, Carved Desks, Crystal Base)
   const brandArch = buildBrandArchitecture(pianoAnchor, isSoftwareGL, maxAniso, isMobile);
 
   // Concert Grand 3/4-Pedal Lyre, Live HD Scrolling Music Desk Score, & 3D Note Visualizer
   const pedalLyre = buildConcertPedalLyre(pianoAnchor, lowSpecGlass);
   const musicDeskScore = createMusicDeskScore(pianoAnchor, rigNodes, maxAniso, isMobile);
-  const noteVisualizer = createPianoNoteVisualizer(pianoAnchor, rigNodes, lowSpecGlass);
+  const noteVisualizer = createPianoNoteVisualizer(
+    pianoAnchor,
+    rigNodes,
+    lowSpecGlass,
+    modern88Action.keyAnchors88
+  );
 
   // Lid angle state ("closed" = 0°, "half" = 24°, "open" = 48.5°)
   const LID_ANGLES_DEG = { closed: 0.0, half: 24.0, open: 48.5 };
@@ -1800,17 +1828,18 @@ export async function loadFortepianoStageRig({
     return safeMode;
   }
 
-  // Coupled 61-key Prellmechanik + Auslöser escapement + overhead Keil damper + knee-lever arrays
-  const keyDown = new Uint8Array(FORTEPIANO_TOTAL_KEYS);
-  const keyPos = new Float32Array(FORTEPIANO_TOTAL_KEYS);
-  const keyVel = new Float32Array(FORTEPIANO_TOTAL_KEYS);
-  const keyHand = new Array(FORTEPIANO_TOTAL_KEYS).fill("RH");
-  const hammerPhase = new Float32Array(FORTEPIANO_TOTAL_KEYS);
-  const hammerVel = new Float32Array(FORTEPIANO_TOTAL_KEYS);
-  const hammerEscaped = new Uint8Array(FORTEPIANO_TOTAL_KEYS);
-  const escapementPhase = new Float32Array(FORTEPIANO_TOTAL_KEYS);
-  const stringEnergy = new Float32Array(FORTEPIANO_TOTAL_KEYS);
-  const damperLift = new Float32Array(FORTEPIANO_TOTAL_KEYS);
+  // Coupled 88-key Concert Grand / 61-key Prellmechanik kinematics arrays (zero-GC)
+  const keyDown = new Uint8Array(CONCERT_GRAND_TOTAL_KEYS);
+  const keyPos = new Float32Array(CONCERT_GRAND_TOTAL_KEYS);
+  const keyVel = new Float32Array(CONCERT_GRAND_TOTAL_KEYS);
+  const keyHand = new Array(CONCERT_GRAND_TOTAL_KEYS).fill("RH");
+  const hammerPhase = new Float32Array(CONCERT_GRAND_TOTAL_KEYS);
+  const hammerVel = new Float32Array(CONCERT_GRAND_TOTAL_KEYS);
+  const hammerEscaped = new Uint8Array(CONCERT_GRAND_TOTAL_KEYS);
+  const escapementPhase = new Float32Array(CONCERT_GRAND_TOTAL_KEYS);
+  const stringEnergy = new Float32Array(CONCERT_GRAND_TOTAL_KEYS);
+  const damperLift = new Float32Array(CONCERT_GRAND_TOTAL_KEYS);
+  const activeNotesForScore = [];
 
   let curKneeLever = 0.0;
   let isHoveredFromHall = false;
@@ -1819,16 +1848,21 @@ export async function loadFortepianoStageRig({
   const pickColliders = buildOffSceneFortepianoPickColliders();
 
   function midiToKeyIndex(rawMidi) {
-    const m = foldMidiIntoFortepianoCompass(rawMidi);
-    const idx = m - FORTEPIANO_MIN_MIDI;
-    return idx >= 0 && idx < FORTEPIANO_TOTAL_KEYS ? idx : -1;
+    if (isCurrentHistorical) {
+      const m = foldMidiIntoFortepianoCompass(rawMidi);
+      const idx = m - FORTEPIANO_MIN_MIDI;
+      return idx >= 0 && idx < FORTEPIANO_TOTAL_KEYS ? idx : -1;
+    }
+    const m = Math.max(CONCERT_GRAND_MIN_MIDI, Math.min(CONCERT_GRAND_MAX_MIDI, Math.round(rawMidi)));
+    const idx = m - CONCERT_GRAND_MIN_MIDI;
+    return idx >= 0 && idx < CONCERT_GRAND_TOTAL_KEYS ? idx : -1;
   }
 
   function strikeKey(midi, velocity = 0.80, hand = null) {
     const idx = midiToKeyIndex(midi);
     if (idx < 0) return;
     if (keyDown[idx]) {
-      // Crisp Prellmechanik repetition re-strike!
+      // Crisp double-escapement / Prellmechanik repetition re-strike!
       keyPos[idx] = Math.min(keyPos[idx], 0.30);
       hammerPhase[idx] = Math.min(hammerPhase[idx], 0.28);
     }
@@ -1841,7 +1875,7 @@ export async function loadFortepianoStageRig({
     escapementPhase[idx] = 1.0;
     stringEnergy[idx] = Math.min(1.0, velocity * 1.12);
     noteVisualizer.spawnParticlesForKey(
-      idx,
+      midi,
       velocity,
       resolvedHand,
       Boolean(acoustics?.isSustainActive || acoustics?.damperSustain)
@@ -1871,7 +1905,7 @@ export async function loadFortepianoStageRig({
   }
 
   function releaseAllKeysAndPedals() {
-    for (let i = 0; i < FORTEPIANO_TOTAL_KEYS; i++) {
+    for (let i = 0; i < CONCERT_GRAND_TOTAL_KEYS; i++) {
       keyDown[i] = 0;
     }
     onWakeRender();
@@ -1888,6 +1922,13 @@ export async function loadFortepianoStageRig({
   }
 
   function pickKeyAtRay(raycaster) {
+    if (!isCurrentHistorical) {
+      const hits88 = raycaster.intersectObjects(modern88Action.keyMeshes, false);
+      if (hits88.length > 0) {
+        return modern88Action.keyMeshToMidi.get(hits88[0].object) || -1;
+      }
+      return -1;
+    }
     const hits = raycaster.intersectObjects(interactiveKeyMeshes, false);
     if (hits.length > 0) {
       return keyMeshToMidi.get(hits[0].object) || -1;
@@ -1970,8 +2011,12 @@ export async function loadFortepianoStageRig({
     }
 
     const nowMs = performance.now();
-    for (let i = 0; i < FORTEPIANO_TOTAL_KEYS; i++) {
-      const midi = FORTEPIANO_MIN_MIDI + i;
+    const activeKeyCount = isCurrentHistorical ? FORTEPIANO_TOTAL_KEYS : CONCERT_GRAND_TOTAL_KEYS;
+    const activeMinMidi = isCurrentHistorical ? FORTEPIANO_MIN_MIDI : CONCERT_GRAND_MIN_MIDI;
+    activeNotesForScore.length = 0;
+
+    for (let i = 0; i < activeKeyCount; i++) {
+      const midi = activeMinMidi + i;
       const down = keyDown[i];
       const targetK = down ? 1.0 : 0.0;
       const diffK = targetK - keyPos[i];
@@ -1984,7 +2029,7 @@ export async function loadFortepianoStageRig({
         keyPos[i] = targetK;
       }
 
-      // Prellmechanik hammer trajectory (hammerRotSign = -1 -> upward strike into bichord pair)
+      // Double-escapement / Prellmechanik hammer trajectory
       if (down && !hammerEscaped[i]) {
         hammerPhase[i] = instant ? 0.90 : hammerPhase[i] + hammerVel[i] * dt;
         escapementPhase[i] = 1.0;
@@ -2017,49 +2062,7 @@ export async function loadFortepianoStageRig({
         }
       }
 
-      const kNode = rigNodes.keys[i];
-      if (kNode) {
-        const rest = restTransforms.get(kNode.uuid);
-        if (rest) kNode.rotation.x = rest.rot.x + keyPos[i] * 0.0733;
-      }
-
-      // Direct emissive highlight on the actual 3D key meshes (OFF by default; RH gold / LH sapphire)
-      const kMats = keyMatRefs[i];
-      if (kMats.length > 0) {
-        if (keyGlowEnabled && keyPos[i] > 0.04) {
-          const glowHex = keyHand[i] === "LH" ? 0x2c7be5 : 0xd99b26;
-          const glowInt = 0.78 * keyPos[i];
-          for (let jm = 0; jm < kMats.length; jm++) {
-            const m = kMats[jm];
-            if (m && m.emissive) {
-              m.emissive.setHex(glowHex);
-              m.emissiveIntensity = glowInt;
-            }
-          }
-        } else {
-          for (let jm = 0; jm < kMats.length; jm++) {
-            const m = kMats[jm];
-            if (m && m.emissive && m.emissiveIntensity > 0) {
-              m.emissive.setHex(0x000000);
-              m.emissiveIntensity = 0.0;
-            }
-          }
-        }
-      }
-
-      const hNode = rigNodes.hammers[i];
-      if (hNode) {
-        const rest = restTransforms.get(hNode.uuid);
-        if (rest) hNode.rotation.x = rest.rot.x - hammerPhase[i] * 0.34;
-      }
-
-      const eNode = rigNodes.escapements[i];
-      if (eNode) {
-        const rest = restTransforms.get(eNode.uuid);
-        if (rest) eNode.rotation.x = rest.rot.x + escapementPhase[i] * 0.19;
-      }
-
-      // Individual overhead Keil / Püschel damper jack lift (+10.5 mm on key press)
+      // Individual overhead damper lift
       const keyLiftsDamper = down || (acoustics && acoustics.keysDown.has(midi)) ? 1.0 : 0.0;
       const diffD = keyLiftsDamper - damperLift[i];
       if (instant) {
@@ -2070,30 +2073,87 @@ export async function loadFortepianoStageRig({
       } else {
         damperLift[i] = keyLiftsDamper;
       }
-      const dNode = rigNodes.dampers[i];
-      if (dNode) {
-        const rest = restTransforms.get(dNode.uuid);
-        if (rest) dNode.position.y = rest.pos.y + damperLift[i] * 0.0105;
-      }
 
       if (stringEnergy[i] > 0.002) {
         stringEnergy[i] *= instant ? 0.0 : Math.pow(0.24, dt);
+        if (!instant) moving = true;
+      }
+
+      if (isCurrentHistorical) {
+        const kNode = rigNodes.keys[i];
+        if (kNode) {
+          const rest = restTransforms.get(kNode.uuid);
+          if (rest) kNode.rotation.x = rest.rot.x + keyPos[i] * 0.0733;
+        }
+
+        const kMats = keyMatRefs[i];
+        if (kMats && kMats.length > 0) {
+          if (keyGlowEnabled && keyPos[i] > 0.04) {
+            const glowHex = keyHand[i] === "LH" ? 0x2c7be5 : 0xd99b26;
+            const glowInt = 0.78 * keyPos[i];
+            for (let jm = 0; jm < kMats.length; jm++) {
+              const m = kMats[jm];
+              if (m && m.emissive) {
+                m.emissive.setHex(glowHex);
+                m.emissiveIntensity = glowInt;
+              }
+            }
+          } else {
+            for (let jm = 0; jm < kMats.length; jm++) {
+              const m = kMats[jm];
+              if (m && m.emissive && m.emissiveIntensity > 0) {
+                m.emissive.setHex(0x000000);
+                m.emissiveIntensity = 0.0;
+              }
+            }
+          }
+        }
+
+        const hNode = rigNodes.hammers[i];
+        if (hNode) {
+          const rest = restTransforms.get(hNode.uuid);
+          if (rest) hNode.rotation.x = rest.rot.x - hammerPhase[i] * 0.34;
+        }
+
+        const eNode = rigNodes.escapements[i];
+        if (eNode) {
+          const rest = restTransforms.get(eNode.uuid);
+          if (rest) eNode.rotation.x = rest.rot.x + escapementPhase[i] * 0.19;
+        }
+
+        const dNode = rigNodes.dampers[i];
+        if (dNode) {
+          const rest = restTransforms.get(dNode.uuid);
+          if (rest) dNode.position.y = rest.pos.y + damperLift[i] * 0.0105;
+        }
+
         const cNode = rigNodes.courses[i];
         if (cNode) {
           const rest = restTransforms.get(cNode.uuid);
           if (rest) {
-            cNode.position.x = rest.pos.x + Math.sin(nowMs * 0.095 + i) * 0.00085 * stringEnergy[i];
+            if (stringEnergy[i] > 0.002) {
+              cNode.position.x = rest.pos.x + Math.sin(nowMs * 0.095 + i) * 0.00085 * stringEnergy[i];
+            } else if (cNode.position.x !== rest.pos.x) {
+              cNode.position.x = rest.pos.x;
+            }
           }
         }
-        if (!instant) moving = true;
-      } else {
-        const cNode = rigNodes.courses[i];
-        if (cNode) {
-          const rest = restTransforms.get(cNode.uuid);
-          if (rest && cNode.position.x !== rest.pos.x) cNode.position.x = rest.pos.x;
-        }
       }
-      // Collect active sounding notes for the live 3D music desk score
+
+      if (down) {
+        activeNotesForScore.push({ midi, hand: keyHand[i] });
+      }
+    }
+
+    if (!isCurrentHistorical) {
+      modern88Action.updateKeyVisuals(
+        keyPos,
+        keyHand,
+        hammerPhase,
+        damperLift,
+        curKneeLever,
+        keyGlowEnabled
+      );
     }
 
     // Update 3D Falling Notes & Acoustic Particles
@@ -2102,12 +2162,6 @@ export async function loadFortepianoStageRig({
     }
 
     // Update Live 3D Sheet Music on Music Desk
-    const activeNotesForScore = [];
-    for (let i = 0; i < FORTEPIANO_TOTAL_KEYS; i++) {
-      if (keyDown[i]) {
-        activeNotesForScore.push({ midi: FORTEPIANO_MIN_MIDI + i, hand: keyHand[i] });
-      }
-    }
     musicDeskScore.update(
       activeNotesForScore,
       sustainEngaged,
@@ -2121,12 +2175,9 @@ export async function loadFortepianoStageRig({
   // ==========================================================================
   // DYNAMIC KEYBOARD COLOR & PIANO BRAND / CRYSTAL PBR MATERIAL ENGINE
   // ==========================================================================
-  let currentKeyStyle = DEFAULT_KEY_STYLE;
-  let currentModelId = DEFAULT_PIANO_MODEL_ID;
-  let isCurrentHistorical = false;
-
   function applyKeyStyle(style = "modern") {
     currentKeyStyle = style === "historical" ? "historical" : "modern";
+    modern88Action.applyKeyStyle(currentKeyStyle);
     for (const entry of pbr.materialEntries) {
       const { mat, surfaceClass, orig } = entry;
       if (
@@ -2435,15 +2486,37 @@ export async function loadFortepianoStageRig({
       }
     }
 
-    // Toggle 1780-only historical geometry vs modern concert grand brand architecture
+    // Toggle 1780-only historical geometry (61-key) vs full 88-key modern concert grand architecture
     isCurrentHistorical = Boolean(v.isHistorical);
     const isCrystalModel = Boolean(v.isCrystal);
+
+    // Scale case & brand architecture to full 88-key Concert Grand proportions (1.36x wide, 1.08x deep)
+    const sx = isCurrentHistorical ? 1.0 : MODERN_CASE_SCALE_X;
+    const sz = isCurrentHistorical ? 1.0 : MODERN_CASE_SCALE_Z;
+    root.scale.set(sx, 1.0, sz);
+    brandArch.group.scale.set(sx, 1.0, sz);
+    benchGroup.scale.set(isCurrentHistorical ? 1.0 : 1.18, 1.0, 1.0);
 
     for (const m of historicalKneeLeverMeshes) m.visible = isCurrentHistorical;
     for (const m of historicalNameboardMeshes) m.visible = isCurrentHistorical;
     for (const m of historicalLegMeshes) m.visible = isCurrentHistorical;
     // Eliminate double-image transparent key-front ghosting on Crystal Grand
     for (const m of crystalGhostUndersideMeshes) m.visible = !isCrystalModel;
+
+    // Toggle 61-key historical GLB keys/action/strings vs procedural 88-key modern concert grand action
+    for (let i = 0; i < FORTEPIANO_TOTAL_KEYS; i++) {
+      if (rigNodes.keys[i]) rigNodes.keys[i].visible = isCurrentHistorical;
+      if (rigNodes.hammers[i]) rigNodes.hammers[i].visible = isCurrentHistorical;
+      if (rigNodes.escapements[i]) rigNodes.escapements[i].visible = isCurrentHistorical;
+      if (rigNodes.dampers[i]) rigNodes.dampers[i].visible = isCurrentHistorical;
+      if (rigNodes.courses[i]) rigNodes.courses[i].visible = isCurrentHistorical;
+    }
+    if (rigNodes.actionSled) rigNodes.actionSled.visible = isCurrentHistorical;
+    if (rigNodes.damperRack) rigNodes.damperRack.visible = isCurrentHistorical;
+
+    modern88Action.group.visible = !isCurrentHistorical;
+    modern88Action.syncPianoModelVisual(model);
+    noteVisualizer.setKeyboardMode(!isCurrentHistorical);
 
     if (rigNodes.musicDesk) {
       rigNodes.musicDesk.visible = isCurrentHistorical && curLidAngleDeg >= 14.0;
@@ -2513,14 +2586,16 @@ export async function loadFortepianoStageRig({
     dispose() {
       stageFortepianoEnvRT.dispose();
       brandArch.dispose();
+      modern88Action.dispose();
       for (const c of pickColliders) {
         if (c.geometry) c.geometry.dispose();
       }
     },
     getQAStats() {
+      const totalKeys = isCurrentHistorical ? FORTEPIANO_TOTAL_KEYS : CONCERT_GRAND_TOTAL_KEYS;
       let activeKeysCount = 0;
       let liftedDampersCount = 0;
-      for (let i = 0; i < FORTEPIANO_TOTAL_KEYS; i++) {
+      for (let i = 0; i < totalKeys; i++) {
         if (keyPos[i] > 0.05) activeKeysCount++;
         if (damperLift[i] > 0.05 || curKneeLever > 0.05) liftedDampersCount++;
       }
@@ -2531,11 +2606,11 @@ export async function loadFortepianoStageRig({
         keyStyle: currentKeyStyle,
         upgradedMeshes: pbr.upgradedMeshes,
         upgradedMaterials: pbr.upgradedMaterials,
-        keysCount: rigNodes.keys.filter(Boolean).length,
-        hammersCount: rigNodes.hammers.filter(Boolean).length,
-        escapementsCount: rigNodes.escapements.filter(Boolean).length,
-        dampersCount: rigNodes.dampers.filter(Boolean).length,
-        coursesCount: rigNodes.courses.filter(Boolean).length,
+        keysCount: isCurrentHistorical ? rigNodes.keys.filter(Boolean).length : CONCERT_GRAND_TOTAL_KEYS,
+        hammersCount: isCurrentHistorical ? rigNodes.hammers.filter(Boolean).length : CONCERT_GRAND_TOTAL_KEYS,
+        escapementsCount: isCurrentHistorical ? rigNodes.escapements.filter(Boolean).length : CONCERT_GRAND_TOTAL_KEYS,
+        dampersCount: isCurrentHistorical ? rigNodes.dampers.filter(Boolean).length : CONCERT_GRAND_TOTAL_KEYS,
+        coursesCount: isCurrentHistorical ? rigNodes.courses.filter(Boolean).length : CONCERT_GRAND_TOTAL_KEYS,
         activeKeysCount,
         liftedDampersCount,
         lidAngleDeg,

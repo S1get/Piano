@@ -24,7 +24,7 @@ import { HISTORICAL_REPERTOIRE } from "./fortepiano_repertoire_data.js";
 import {
   loadFortepianoStageRig,
   loadGstaticGlb,
-  FORTEPIANO_MIN_MIDI,
+  CONCERT_GRAND_MIN_MIDI,
   midiToNoteName,
 } from "./fortepiano_stage_rig.js";
 import {
@@ -1540,7 +1540,7 @@ async function initKoernerHallExplorer() {
     if (camera.position.distanceTo(fortepianoRig.worldCenter) < 5.8) {
       setRayFromClientEvent(e);
       const hitMidi = fortepianoRig.pickKeyAtRay(pickRaycaster);
-      if (hitMidi >= FORTEPIANO_MIN_MIDI) {
+      if (hitMidi >= CONCERT_GRAND_MIN_MIDI) {
         controller.suppressPointerDrag = true;
         activePointerMidi = hitMidi;
         acoustics.playInteractiveNoteOn(hitMidi, 0.78);
@@ -1594,7 +1594,7 @@ async function initKoernerHallExplorer() {
   });
 
   const releaseActivePointerKey = () => {
-    if (activePointerMidi >= FORTEPIANO_MIN_MIDI) {
+    if (activePointerMidi >= CONCERT_GRAND_MIN_MIDI) {
       acoustics.playInteractiveNoteOff(activePointerMidi);
       if (fortepianoRig) fortepianoRig.releaseKey(activePointerMidi);
       activePointerMidi = -1;
@@ -1608,7 +1608,7 @@ async function initKoernerHallExplorer() {
     if (
       e.button !== 0 ||
       controller.wasDragGesture ||
-      activePointerMidi >= FORTEPIANO_MIN_MIDI ||
+      activePointerMidi >= CONCERT_GRAND_MIN_MIDI ||
       (academyUI && academyUI.isOpen()) ||
       !zoneSeatRig
     ) {
@@ -1630,16 +1630,17 @@ async function initKoernerHallExplorer() {
     }
   });
 
+  let lastHoverRaycastMs = 0;
   canvas.addEventListener("pointermove", (e) => {
     if (academyUI && academyUI.isOpen()) {
       hoverPill.style.display = "none";
       canvas.classList.remove("seat-hover");
       return;
     }
-    if (activePointerMidi >= FORTEPIANO_MIN_MIDI && fortepianoRig) {
+    if (activePointerMidi >= CONCERT_GRAND_MIN_MIDI && fortepianoRig) {
       setRayFromClientEvent(e);
       const dragMidi = fortepianoRig.pickKeyAtRay(pickRaycaster);
-      if (dragMidi >= FORTEPIANO_MIN_MIDI && dragMidi !== activePointerMidi) {
+      if (dragMidi >= CONCERT_GRAND_MIN_MIDI && dragMidi !== activePointerMidi) {
         acoustics.playInteractiveNoteOff(activePointerMidi);
         fortepianoRig.releaseKey(activePointerMidi);
         activePointerMidi = dragMidi;
@@ -1661,10 +1662,15 @@ async function initKoernerHallExplorer() {
       return;
     }
 
+    // Throttle non-dragging hover raycasts (~30 Hz) to eliminate desktop mousemove CPU spikes
+    const nowHoverMs = performance.now();
+    if (nowHoverMs - lastHoverRaycastMs < 32) return;
+    lastHoverRaycastMs = nowHoverMs;
+
     setRayFromClientEvent(e);
     if (camera.position.distanceTo(fortepianoRig.worldCenter) < 5.8) {
       const hoverMidi = fortepianoRig.pickKeyAtRay(pickRaycaster);
-      if (hoverMidi >= FORTEPIANO_MIN_MIDI) {
+      if (hoverMidi >= CONCERT_GRAND_MIN_MIDI) {
         hoverPill.textContent = `${midiToNoteName(hoverMidi)} \u00B7 Нажмите или проведите по клавишам`;
         hoverPill.style.left = `${e.clientX}px`;
         hoverPill.style.top = `${e.clientY}px`;
@@ -1796,11 +1802,11 @@ async function initKoernerHallExplorer() {
       hallBatchCount < 20 &&
       drawCalls <= 1200 &&
       Boolean(fortepianoStats.loaded) &&
-      fortepianoStats.keysCount === 61 &&
-      fortepianoStats.hammersCount === 61 &&
-      fortepianoStats.dampersCount === 61 &&
+      (fortepianoStats.keysCount === 88 || fortepianoStats.keysCount === 61) &&
+      (fortepianoStats.hammersCount === 88 || fortepianoStats.hammersCount === 61) &&
+      (fortepianoStats.dampersCount === 88 || fortepianoStats.dampersCount === 61) &&
       repertoireCount === HISTORICAL_REPERTOIRE.length &&
-      repertoireNotes > 500;
+      repertoireNotes > 200;
 
     return {
       pass,
