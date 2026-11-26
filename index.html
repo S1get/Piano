@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
   <title>Koerner Hall - 1780 Stein-Schule Fortepiano &amp; Spatial Acoustics</title>
-  <meta name="description" content="Интерактивная 3D-академия концертного рояля: 9 легендарных марок (Steinway, Fazioli, Bösendorfer, Yamaha CFX, Shigeru Kawai, Bechstein, Blüthner, Хрустальный рояль), 20 полных произведений, 12 композиторов, 5 мировых залов и мобильная оптимизация 60 FPS." />
+  <meta name="description" content="Интерактивная 3D-академия концертного рояля: 14 легендарных инструментов на 6 реальных банках сэмплов, 43 произведения с выбором версии исполнения, 18 композиторов, 5 мировых залов и интерактивная школа обучения фортепиано и теории музыки." />
   <meta property="og:title" content="Koerner Hall - 1780 Stein-Schule Fortepiano &amp; Spatial Acoustics" />
-  <meta property="og:description" content="Интерактивная 3D-академия концертного рояля: 9 легендарных марок (Steinway, Fazioli, Bösendorfer, Yamaha CFX, Shigeru Kawai, Bechstein, Blüthner, Хрустальный рояль), 20 полных произведений, 12 композиторов, 5 мировых залов и мобильная оптимизация 60 FPS." />
+  <meta property="og:description" content="Интерактивная 3D-академия концертного рояля: 14 легендарных инструментов на 6 реальных банках сэмплов, 43 произведения с выбором версии исполнения, 18 композиторов, 5 мировых залов и интерактивная школа обучения фортепиано и теории музыки." />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2318181B'/%3E%3Cpath d='M6 21 C11 11, 21 11, 26 21' stroke='%23D4A36A' stroke-width='2.5' fill='none'/%3E%3Cpath d='M9 24 C13 16, 19 16, 23 24' stroke='%23FAF9F6' stroke-width='1.6' fill='none'/%3E%3C/svg%3E" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -40,7 +40,7 @@
     <div id="hud-capsule" role="toolbar" aria-label="Управление воспроизведением, роялем, педалью и залами">
       <!-- Row 1: Academy + Transport + Timeline + Tempo -->
       <div class="hud-row">
-        <button type="button" id="hud-academy-btn" class="hud-btn hud-academy-btn" title="Открыть меню композиторов, произведений, словаря жанров и залов (M)">
+        <button type="button" id="hud-academy-btn" class="hud-btn hud-academy-btn" title="Открыть меню композиторов, произведений, обучения, словаря жанров и залов (M)">
           Академия и Репертуар
         </button>
         <span class="hud-sep" aria-hidden="true"></span>
@@ -48,6 +48,7 @@
           &#9654;
         </button>
         <select id="hud-piece-select" class="hud-select hud-piece-select" aria-label="Выбор произведения" title="Быстрый выбор произведения"></select>
+        <select id="hud-version-select" class="hud-select hud-version-select" aria-label="Версия исполнения" title="Выбор версии произведения: Оригинал, Виртуозная, Камерная или Учебная"></select>
         <input type="range" id="hud-scrub" class="hud-scrub" min="0" max="1000" value="0" aria-label="Позиция воспроизведения" title="Перемотка произведения" />
         <span id="hud-time" class="hud-time hud-mono">0:00 / 3:13</span>
         <span class="hud-sep" aria-hidden="true"></span>
@@ -100,6 +101,7 @@
         <nav class="academy-tabs" role="tablist" aria-label="Разделы академии">
           <button type="button" class="academy-tab active" data-academy-tab="works" role="tab" aria-selected="true">Произведения</button>
           <button type="button" class="academy-tab" data-academy-tab="composers" role="tab" aria-selected="false">Композиторы</button>
+          <button type="button" class="academy-tab" data-academy-tab="learn" role="tab" aria-selected="false">Обучение</button>
           <button type="button" class="academy-tab" data-academy-tab="genres" role="tab" aria-selected="false">Словарь жанров</button>
           <button type="button" class="academy-tab" data-academy-tab="halls" role="tab" aria-selected="false">Залы и акустика</button>
         </nav>

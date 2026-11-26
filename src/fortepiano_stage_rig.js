@@ -1974,22 +1974,36 @@ export async function loadFortepianoStageRig({
       curLidAngleDeg = targetLidAngleDeg;
     }
     lidAngleDeg = Number(curLidAngleDeg.toFixed(1));
+    const lidRad = (curLidAngleDeg * Math.PI) / 180.0;
     if (rigNodes.lidMain) {
-      rigNodes.lidMain.rotation.z = (curLidAngleDeg * Math.PI) / 180.0;
+      rigNodes.lidMain.rotation.z = lidRad;
     }
+    // Smoothly unfold front hinged lid flap from folded-back (~-PI) to flat (0) as lid closes
+    if (rigNodes.lidFlap) {
+      const restFlap = restTransforms.get(rigNodes.lidFlap.uuid);
+      if (restFlap) {
+        const unfoldRaw = THREE.MathUtils.clamp(1.0 - curLidAngleDeg / 26.0, 0.0, 1.0);
+        const unfoldSmooth = unfoldRaw * unfoldRaw * (3.0 - 2.0 * unfoldRaw);
+        rigNodes.lidFlap.rotation.x = restFlap.rot.x * (1.0 - unfoldSmooth);
+      }
+    }
+    // Concert lid prop stick: full stick at 48.5°, short stick (proportional scale.y) at 24°, stowed below 10°
     if (rigNodes.lidProp) {
       const restProp = restTransforms.get(rigNodes.lidProp.uuid);
-      if (curLidAngleDeg < 6.0) {
+      if (curLidAngleDeg < 10.0) {
         rigNodes.lidProp.visible = false;
       } else {
         rigNodes.lidProp.visible = true;
         if (restProp) {
-          const openRatio = curLidAngleDeg / 48.5;
-          rigNodes.lidProp.rotation.z = restProp.rot.z + (1.0 - openRatio) * 0.42;
+          const sinFull = Math.sin((48.5 * Math.PI) / 180.0);
+          const heightRatio = THREE.MathUtils.clamp(Math.sin(lidRad) / sinFull, 0.24, 1.0);
+          rigNodes.lidProp.rotation.z = restProp.rot.z;
+          rigNodes.lidProp.scale.set(1.0, heightRatio, 1.0);
         }
       }
     }
-    const deskVisible = curLidAngleDeg >= 14.0;
+    // Fold away music desk & score book cleanly BEFORE lid lowers to half-open (24°) so zero poke-through occurs
+    const deskVisible = curLidAngleDeg >= 32.0;
     if (rigNodes.musicDesk) {
       // Historical 1780 vertical rack ONLY shown on Stein 1780; modern models use bespoke carved concert desks behind the score
       rigNodes.musicDesk.visible = isCurrentHistorical && deskVisible;
@@ -2380,6 +2394,7 @@ export async function loadFortepianoStageRig({
           mat.clearcoat = v.caseClearcoat;
           mat.clearcoatRoughness = v.caseClearcoatRoughness;
           mat.envMapIntensity = v.caseEnvIntensity;
+          if ("reflectivity" in mat) mat.reflectivity = 0.48;
           mat.needsUpdate = true;
         } else if (surfaceClass === "ebonized_rim_trim" || surfaceClass === "ebony_polished") {
           mat.map = null;
@@ -2387,7 +2402,8 @@ export async function loadFortepianoStageRig({
           mat.roughness = Math.max(0.06, v.caseRoughness);
           mat.clearcoat = v.caseClearcoat;
           mat.clearcoatRoughness = v.caseClearcoatRoughness;
-          mat.envMapIntensity = v.caseEnvIntensity * 0.95;
+          mat.envMapIntensity = v.caseEnvIntensity * 0.92;
+          if ("reflectivity" in mat) mat.reflectivity = 0.48;
           mat.needsUpdate = true;
         } else if (surfaceClass === "sycamore_marquetry") {
           if (!v.keepWoodMap) {
@@ -2399,6 +2415,7 @@ export async function loadFortepianoStageRig({
           mat.clearcoat = v.caseClearcoat;
           mat.clearcoatRoughness = v.caseClearcoatRoughness;
           mat.envMapIntensity = v.caseEnvIntensity;
+          if ("reflectivity" in mat) mat.reflectivity = 0.48;
           mat.needsUpdate = true;
         } else if (surfaceClass === "alpine_spruce") {
           mat.color.setHex(v.soundboardColor);
@@ -2519,12 +2536,12 @@ export async function loadFortepianoStageRig({
     noteVisualizer.setKeyboardMode(!isCurrentHistorical);
 
     if (rigNodes.musicDesk) {
-      rigNodes.musicDesk.visible = isCurrentHistorical && curLidAngleDeg >= 14.0;
+      rigNodes.musicDesk.visible = isCurrentHistorical && curLidAngleDeg >= 32.0;
     }
 
     // Sync brand-unique fallboard logos, cast-iron harps, modern legs, carved music desks & crystal base
     brandArch.syncPianoModelVisual(model);
-    brandArch.setDeskVisible(curLidAngleDeg >= 14.0);
+    brandArch.setDeskVisible(curLidAngleDeg >= 32.0);
     musicDeskScore.setHistoricalOffset(isCurrentHistorical);
 
     // Sync 3-pedal / 4-pedal (Fazioli F308) concert lyre finishes & layout to the active piano model

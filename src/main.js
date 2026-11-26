@@ -44,6 +44,11 @@ import {
 import { getPieceAcademyMeta } from "./academy_catalog.js";
 import { createAcademyController } from "./academy_ui.js";
 import { buildHallStageArchitecture } from "./hall_architecture.js";
+import {
+  PIECE_VERSIONS,
+  DEFAULT_PIECE_VERSION_ID,
+  getPieceVersion,
+} from "./piece_versions.js";
 
 // ============================================================================
 // 0. ERROR CAPTURE FOR DETERMINISTIC QA GATE
@@ -222,6 +227,7 @@ async function initKoernerHallExplorer() {
   const paramHud = urlParams.get("hud");
   const paramExp = urlParams.get("exp");
   const paramPerf = urlParams.get("perf");
+  const paramVersion = urlParams.get("version");
 
   const isMobileDevice =
     Boolean(window.matchMedia?.("(pointer: coarse)")?.matches) ||
@@ -239,6 +245,7 @@ async function initKoernerHallExplorer() {
   const hudAcademyBtn = document.getElementById("hud-academy-btn");
   const hudPlayBtn = document.getElementById("hud-play-btn");
   const hudPieceSelect = document.getElementById("hud-piece-select");
+  const hudVersionSelect = document.getElementById("hud-version-select");
   const hudScrub = document.getElementById("hud-scrub");
   const hudTime = document.getElementById("hud-time");
   const hudTempoSelect = document.getElementById("hud-tempo-select");
@@ -297,6 +304,17 @@ async function initKoernerHallExplorer() {
       opt.textContent = getShortPieceLabel(p);
       hudPieceSelect.appendChild(opt);
     }
+  }
+
+  const initialVersionId = getPieceVersion(paramVersion || DEFAULT_PIECE_VERSION_ID).id;
+  if (hudVersionSelect) {
+    for (const v of PIECE_VERSIONS) {
+      const opt = document.createElement("option");
+      opt.value = v.id;
+      opt.textContent = `${v.shortLabel} \u25BE`;
+      hudVersionSelect.appendChild(opt);
+    }
+    hudVersionSelect.value = initialVersionId;
   }
 
   if (hudPianoSelect) {
@@ -1074,15 +1092,24 @@ async function initKoernerHallExplorer() {
   }
 
   let isScrubbing = false;
-  const syncPieceTooltips = (piece, playing) => {
+  const syncPieceTooltips = (piece, playing, versionId = null) => {
     if (!piece) return;
     const actionWord = playing ? "Пауза" : "Играть";
+    const vInfo = getPieceVersion(versionId || performancePlayer?.versionId || DEFAULT_PIECE_VERSION_ID);
     if (hudPlayBtn) {
       hudPlayBtn.title = `${actionWord}: ${piece.composer} — ${piece.title} (Пробел)`;
     }
     if (hudPieceSelect) {
       if (hudPieceSelect.value !== piece.id) hudPieceSelect.value = piece.id;
       hudPieceSelect.title = `${piece.composer} — ${piece.title}`;
+    }
+    if (hudVersionSelect) {
+      const isSampled = piece.playbackMode === "sampled";
+      hudVersionSelect.disabled = !isSampled;
+      if (hudVersionSelect.value !== vInfo.id) hudVersionSelect.value = vInfo.id;
+      hudVersionSelect.title = isSampled
+        ? `Версия: ${vInfo.label} — ${vInfo.description}`
+        : "Выбор версии доступен для концертных MIDI-произведений";
     }
     if (hudScrub) {
       hudScrub.title = `Перемотка: ${piece.title}`;
@@ -1098,7 +1125,7 @@ async function initKoernerHallExplorer() {
         hudPlayBtn.classList.toggle("is-playing", playing);
       }
       if (performancePlayer) {
-        syncPieceTooltips(performancePlayer.currentPiece, playing);
+        syncPieceTooltips(performancePlayer.currentPiece, playing, performancePlayer.versionId);
       }
       if (hudCapsule) hudCapsule.classList.toggle("playing", playing);
       if (academyUI) academyUI.refresh();
@@ -1114,10 +1141,18 @@ async function initKoernerHallExplorer() {
         if (hudScrub.value !== nextVal) hudScrub.value = nextVal;
       }
     },
-    onPieceChange: (piece) => {
-      syncPieceTooltips(piece, Boolean(performancePlayer?.playing));
+    onPieceChange: (piece, _idx, versionId) => {
+      syncPieceTooltips(piece, Boolean(performancePlayer?.playing), versionId);
       if (fortepianoRig && piece) {
-        fortepianoRig.setScorePiece(piece, getPieceAcademyMeta(piece));
+        const scorePayload =
+          performancePlayer?.activeAlignedNotes && performancePlayer.activeAlignedNotes.length > 0
+            ? {
+                ...piece,
+                alignedNotes: performancePlayer.activeAlignedNotes,
+                durationSec: performancePlayer.durationSec || piece.durationSec,
+              }
+            : piece;
+        fortepianoRig.setScorePiece(scorePayload, getPieceAcademyMeta(piece));
       }
       if (academyUI) academyUI.refresh();
       markDirty();
@@ -1127,15 +1162,25 @@ async function initKoernerHallExplorer() {
   await performancePlayer.preload().catch((err) => {
     console.warn("[KoernerHallPiano] Failed to preload piano repertoire:", err);
   });
-  syncPieceTooltips(performancePlayer.currentPiece, false);
+  syncPieceTooltips(performancePlayer.currentPiece, false, performancePlayer.versionId);
   if (fortepianoRig && performancePlayer.currentPiece) {
-    fortepianoRig.setScorePiece(
-      performancePlayer.currentPiece,
-      getPieceAcademyMeta(performancePlayer.currentPiece)
-    );
+    const curPiece = performancePlayer.currentPiece;
+    const scorePayload =
+      performancePlayer.activeAlignedNotes && performancePlayer.activeAlignedNotes.length > 0
+        ? {
+            ...curPiece,
+            alignedNotes: performancePlayer.activeAlignedNotes,
+            durationSec: performancePlayer.durationSec || curPiece.durationSec,
+          }
+        : curPiece;
+    fortepianoRig.setScorePiece(scorePayload, getPieceAcademyMeta(curPiece));
   }
-  if (paramPiece) {
-    await performancePlayer.selectPiece(paramPiece, false);
+  if (paramPiece || paramVersion) {
+    await performancePlayer.selectPiece(
+      paramPiece || performancePlayer.currentPiece.id,
+      false,
+      initialVersionId
+    );
   }
 
   // Instantiate Music Academy & Composer Encyclopedia Overlay
@@ -1144,11 +1189,12 @@ async function initKoernerHallExplorer() {
       modalEl: academyModal,
       repertoire: HISTORICAL_REPERTOIRE,
       getCurrentPieceId: () => performancePlayer?.currentPiece?.id || null,
+      getCurrentVersionId: () => performancePlayer?.versionId || DEFAULT_PIECE_VERSION_ID,
       getActiveHallId: () => activeHallId,
       getActiveZoneId: () => activeZoneId,
-      onSelectPiece: async (pieceId, autoPlay) => {
+      onSelectPiece: async (pieceId, autoPlay, versionOverride = null) => {
         acoustics.resumeNonBlocking();
-        await performancePlayer.selectPiece(pieceId, autoPlay);
+        await performancePlayer.selectPiece(pieceId, autoPlay, versionOverride);
         if (autoPlay && academyUI) academyUI.close();
         markDirty();
         resetHudIdle();
@@ -1162,6 +1208,23 @@ async function initKoernerHallExplorer() {
         acoustics.resumeNonBlocking();
         applySelectedListeningZone(zoneId, false, { moveCamera: true });
         if (academyUI) academyUI.close();
+        resetHudIdle();
+      },
+      onPlayNoteOn: (midi, vel = 0.76) => {
+        acoustics.resumeNonBlocking();
+        acoustics.playInteractiveNoteOn(midi, vel);
+      },
+      onPlayNoteOff: (midi) => {
+        acoustics.playInteractiveNoteOff(midi);
+      },
+      onPracticePieceSlow: async (pieceId) => {
+        acoustics.resumeNonBlocking();
+        applySelectedTempoRate(0.5);
+        applyKeyGlowEnabled(true);
+        await performancePlayer.selectPiece(pieceId, true);
+        if (academyUI) academyUI.close();
+        if (controller) controller.focusPiano("pianist", { immediate: false });
+        markDirty();
         resetHudIdle();
       },
       onClose: () => {
@@ -1187,6 +1250,14 @@ async function initKoernerHallExplorer() {
     hudPieceSelect.addEventListener("change", () => {
       performancePlayer.selectPiece(hudPieceSelect.value, performancePlayer.playing);
       hudPieceSelect.blur();
+      resetHudIdle();
+      markDirty();
+    });
+  }
+  if (hudVersionSelect) {
+    hudVersionSelect.addEventListener("change", async () => {
+      await performancePlayer.setVersion(hudVersionSelect.value);
+      hudVersionSelect.blur();
       resetHudIdle();
       markDirty();
     });

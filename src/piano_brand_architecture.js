@@ -277,45 +277,90 @@ function buildSingleModernLeg(style, woodMat, metalMat, crystalMat) {
   return leg;
 }
 
+// Exact measured unscaled interior bentside wall X(z) of `stein_1780_fortepiano.glb`
+// (`Resonanzboden_Anhangleiste_Rail`, straight bass spine inner wall at x = -0.456).
+const HARP_BENTSIDE_CURVE = [
+  [-0.34,  0.450],
+  [-0.50,  0.446],
+  [-0.60,  0.330],
+  [-0.70,  0.225],
+  [-0.80,  0.148],
+  [-0.90,  0.091],
+  [-1.00,  0.051],
+  [-1.10,  0.012],
+  [-1.20, -0.027],
+  [-1.30, -0.053],
+  [-1.40, -0.086],
+  [-1.50, -0.117],
+  [-1.60, -0.148],
+  [-1.70, -0.181],
+  [-1.80, -0.219],
+  [-1.90, -0.280],
+  [-2.00, -0.419],
+  [-2.07, -0.456],
+];
+
+function getHarpBentsideMaxX(z) {
+  if (z >= HARP_BENTSIDE_CURVE[0][0]) return HARP_BENTSIDE_CURVE[0][1];
+  const last = HARP_BENTSIDE_CURVE[HARP_BENTSIDE_CURVE.length - 1];
+  if (z <= last[0]) return last[1];
+  for (let i = 0; i < HARP_BENTSIDE_CURVE.length - 1; i++) {
+    const [z0, x0] = HARP_BENTSIDE_CURVE[i];
+    const [z1, x1] = HARP_BENTSIDE_CURVE[i + 1];
+    if (z <= z0 && z >= z1) {
+      const t = (z - z0) / (z1 - z0);
+      return x0 + (x1 - x0) * t;
+    }
+  }
+  return last[1];
+}
+
 /**
- * Helper: build unique Cast-Iron Concert Harp / Plate assembly nestled inside the open rim
- * at y = 0.858..0.882 (visible prominently whenever the lid is open or on Crystal Grand).
+ * Helper: build unique Cast-Iron Concert Harp / Plate assembly nestled strictly INSIDE the
+ * measured curved bentside rim (`x in [-0.432 .. getHarpBentsideMaxX(z) - 0.028]`) and strictly
+ * BELOW the closed lid underside (`y <= 0.878`, closed lid sits at `y = 0.895`).
  */
 function buildBrandHarpAssembly(style, harpMat, feltMat, accentMat, crestTex) {
   const grp = new THREE.Group();
   grp.name = `ConcertHarp_${style}`;
-  const yPlate = 0.862;
+  const yPlate = 0.852;
 
   // 1. Cast-iron Pinblock / Wrestplank Armor Plate across front cavity (behind dampers)
-  const frontBar = new THREE.Mesh(new THREE.BoxGeometry(0.84, 0.016, 0.085), harpMat);
-  frontBar.position.set(0.0, yPlate + 0.004, -0.34);
+  const frontBar = new THREE.Mesh(new THREE.BoxGeometry(0.835, 0.012, 0.078), harpMat);
+  frontBar.position.set(0.0, yPlate + 0.004, -0.355);
   grp.add(frontBar);
 
   // Brass / Platinum Agraffe & Capo d'Astro pressure bar
-  const capoBar = new THREE.Mesh(new THREE.CylinderGeometry(0.007, 0.007, 0.81, 12), accentMat);
+  const capoBar = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.80, 12), accentMat);
   capoBar.rotation.z = Math.PI * 0.5;
-  capoBar.position.set(0.0, yPlate + 0.016, -0.308);
+  capoBar.position.set(0.0, yPlate + 0.013, -0.324);
   grp.add(capoBar);
 
-  // Signature colored felt hitch-pin braid along front wrestplank & tail curve
-  const frontFelt = new THREE.Mesh(new THREE.BoxGeometry(0.81, 0.009, 0.018), feltMat);
-  frontFelt.position.set(0.0, yPlate + 0.014, -0.382);
+  // Signature colored felt hitch-pin braid along front wrestplank & interior tail curve
+  const frontFelt = new THREE.Mesh(new THREE.BoxGeometry(0.80, 0.007, 0.015), feltMat);
+  frontFelt.position.set(0.0, yPlate + 0.011, -0.392);
   grp.add(frontFelt);
 
-  const tailFelt = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.009, 0.018), feltMat);
-  tailFelt.position.set(-0.28, yPlate + 0.013, -1.86);
-  tailFelt.rotation.y = 0.24;
+  const tailFelt = new THREE.Mesh(new THREE.BoxGeometry(0.105, 0.007, 0.013), feltMat);
+  tailFelt.position.set(-0.365, yPlate + 0.010, -1.84);
+  tailFelt.rotation.y = 0.68;
   grp.add(tailFelt);
 
-  // 2. Curved Bentside Hitch-Pin Flange (following the right-side rim gracefully)
+  // 2. Curved Bentside Hitch-Pin Flange following the EXACT interior GLB rim with 0.032 m margin
   const rimPts = [
-    [-0.415, -0.35],
-    [-0.415, -1.88],
-    [-0.19, -1.86],
-    [0.04, -1.48],
-    [0.24, -1.04],
-    [0.415, -0.58],
-    [0.415, -0.35],
+    [-0.422, -0.35],
+    [-0.422, -1.94],
+    [-0.365, -1.91],
+    [-0.275, -1.80],
+    [-0.215, -1.64],
+    [-0.155, -1.42],
+    [-0.088, -1.20],
+    [-0.015, -1.00],
+    [ 0.068, -0.84],
+    [ 0.168, -0.70],
+    [ 0.285, -0.58],
+    [ 0.398, -0.49],
+    [ 0.414, -0.35],
   ];
   for (let i = 0; i < rimPts.length - 1; i++) {
     const [x0, z0] = rimPts[i];
@@ -323,157 +368,160 @@ function buildBrandHarpAssembly(style, harpMat, feltMat, accentMat, crestTex) {
     const dx = x1 - x0;
     const dz = z1 - z0;
     const len = Math.hypot(dx, dz);
-    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.018, len + 0.02), harpMat);
-    beam.position.set((x0 + x1) * 0.5, yPlate + 0.003, (z0 + z1) * 0.5);
+    const beam = new THREE.Mesh(new THREE.BoxGeometry(0.026, 0.014, len + 0.012), harpMat);
+    beam.position.set((x0 + x1) * 0.5, yPlate + 0.004, (z0 + z1) * 0.5);
     beam.rotation.y = Math.atan2(dx, dz);
     grp.add(beam);
   }
 
-  // Helper to place a structural cast-iron strut from (x0,z0) to (x1,z1)
-  const addStrut = (x0, z0, x1, z1, width = 0.028, height = 0.022, yOff = 0.012) => {
+  // Helper: place a structural cast-iron strut strictly clamped inside the bentside polygon & below y = 0.878
+  const clampPoint = (x, z, margin = 0.036) => {
+    const cz = Math.max(-1.90, Math.min(-0.36, z));
+    const maxX = getHarpBentsideMaxX(cz) - margin;
+    const minX = -0.416;
+    return [Math.max(minX, Math.min(maxX, x)), cz];
+  };
+
+  const addStrut = (rawX0, rawZ0, rawX1, rawZ1, width = 0.024, height = 0.016, yOff = 0.008) => {
+    let [x0, z0] = clampPoint(rawX0, rawZ0, 0.036 + width * 0.5);
+    let [x1, z1] = clampPoint(rawX1, rawZ1, 0.036 + width * 0.5);
+
+    // Ensure midpoint along concave bentside also stays strictly interior
+    for (const frac of [0.25, 0.5, 0.75]) {
+      const mx = x0 + (x1 - x0) * frac;
+      const mz = z0 + (z1 - z0) * frac;
+      const limitX = getHarpBentsideMaxX(mz) - (0.036 + width * 0.5);
+      if (mx > limitX) {
+        const shift = mx - limitX + 0.006;
+        x1 = Math.max(-0.414, x1 - shift);
+      }
+    }
+
     const dx = x1 - x0;
     const dz = z1 - z0;
     const len = Math.hypot(dx, dz);
+    if (len < 0.06) return;
+
     const mesh = new THREE.Mesh(new THREE.BoxGeometry(width, height, len), harpMat);
     mesh.position.set((x0 + x1) * 0.5, yPlate + yOff, (z0 + z1) * 0.5);
     mesh.rotation.y = Math.atan2(dx, dz);
     grp.add(mesh);
 
-    // Subtle beveled top rib on the strut for authentic sand-cast iron highlights
-    const rib = new THREE.Mesh(new THREE.BoxGeometry(width * 0.46, 0.008, len * 0.96), accentMat);
-    rib.position.set((x0 + x1) * 0.5, yPlate + yOff + height * 0.5 + 0.003, (z0 + z1) * 0.5);
+    // Subtle beveled top rib on the strut (strictly <= yPlate + 0.023 = 0.875)
+    const rib = new THREE.Mesh(new THREE.BoxGeometry(width * 0.44, 0.005, len * 0.96), accentMat);
+    rib.position.set((x0 + x1) * 0.5, yPlate + yOff + height * 0.5 + 0.002, (z0 + z1) * 0.5);
     rib.rotation.y = Math.atan2(dx, dz);
     grp.add(rib);
   };
 
-  if (style === "fazioli_radial") {
-    // FAZIOLI F308: Iconic radiant champagne-gold fan struts + 3 circular Italian sound ports
-    addStrut(-0.34, -0.36, -0.34, -1.84, 0.032, 0.024, 0.014);
-    addStrut(-0.14, -0.36, -0.22, -1.82, 0.030, 0.024, 0.014);
-    addStrut(0.10, -0.36, -0.02, -1.52, 0.028, 0.022, 0.014);
-    addStrut(0.30, -0.36, 0.22, -1.04, 0.026, 0.022, 0.014);
-    // Cross tie brace
-    addStrut(-0.36, -1.16, 0.16, -1.16, 0.026, 0.018, 0.010);
-
-    // Three signature Fazioli golden sound-port rings in the plate deck
-    const portRingGeo = new THREE.TorusGeometry(0.068, 0.011, 12, 28);
-    portRingGeo.rotateX(Math.PI * 0.5);
-    for (const [px, pz, rScale] of [
-      [-0.25, -1.52, 1.05],
-      [-0.08, -1.24, 0.92],
-      [0.14, -0.86, 0.80],
-    ]) {
-      const ring = new THREE.Mesh(portRingGeo, harpMat);
-      ring.position.set(px, yPlate + 0.010, pz);
-      ring.scale.setScalar(rScale);
-      grp.add(ring);
-    }
-  } else if (style === "steinway_fan") {
-    // STEINWAY MODEL D: Classic bronzed-gold 4-strut fan with Duplex bridge bar & circular ports
-    addStrut(-0.36, -0.36, -0.36, -1.84, 0.034, 0.025, 0.014);
-    addStrut(-0.16, -0.36, -0.26, -1.84, 0.030, 0.024, 0.014);
-    addStrut(0.06, -0.36, 0.02, -1.48, 0.028, 0.022, 0.014);
-    addStrut(0.28, -0.36, 0.24, -1.02, 0.026, 0.022, 0.014);
-
-    // Classic Steinway treble bell/duplex bridge rail & tail sound ports
-    const portGeo = new THREE.TorusGeometry(0.062, 0.012, 10, 24);
+  // Safe sound-port torus helper (auto-clamps radius & position strictly inside bentside!)
+  const addSoundPort = (px, pz, radius = 0.048, tube = 0.009, sx = 1.0, sz = 1.0) => {
+    const radX = (radius + tube) * sx;
+    const minX = -0.412 + radX;
+    const maxX = getHarpBentsideMaxX(pz) - 0.032 - radX;
+    if (maxX <= minX) return;
+    const cx = Math.max(minX, Math.min(maxX, px));
+    const portGeo = new THREE.TorusGeometry(radius, tube, 10, 24);
     portGeo.rotateX(Math.PI * 0.5);
-    for (const [px, pz] of [
-      [-0.28, -1.60],
-      [-0.12, -1.32],
-    ]) {
-      const ring = new THREE.Mesh(portGeo, harpMat);
-      ring.position.set(px, yPlate + 0.010, pz);
-      grp.add(ring);
-    }
+    const ring = new THREE.Mesh(portGeo, harpMat);
+    ring.position.set(cx, yPlate + 0.009, pz);
+    ring.scale.set(sx, 1.0, sz);
+    grp.add(ring);
+  };
+
+  if (style === "fazioli_radial") {
+    // FAZIOLI F308: Radiant champagne-gold fan struts + 3 circular Italian sound ports
+    addStrut(-0.35, -0.37, -0.36, -1.86, 0.026, 0.017, 0.009);
+    addStrut(-0.15, -0.37, -0.27, -1.78, 0.024, 0.017, 0.009);
+    addStrut( 0.08, -0.37, -0.14, -1.36, 0.022, 0.016, 0.009);
+    addStrut( 0.28, -0.37,  0.07, -0.84, 0.020, 0.015, 0.009);
+    addStrut(-0.36, -1.14, -0.06, -1.14, 0.020, 0.014, 0.007);
+
+    addSoundPort(-0.30, -1.52, 0.046, 0.008, 1.0, 1.0);
+    addSoundPort(-0.18, -1.24, 0.044, 0.008, 1.0, 1.0);
+    addSoundPort(-0.02, -0.86, 0.040, 0.008, 1.0, 1.0);
+  } else if (style === "steinway_fan") {
+    // STEINWAY MODEL D: Classic bronzed-gold 4-strut fan with circular sound ports
+    addStrut(-0.36, -0.37, -0.36, -1.86, 0.028, 0.017, 0.009);
+    addStrut(-0.16, -0.37, -0.28, -1.80, 0.024, 0.017, 0.009);
+    addStrut( 0.06, -0.37, -0.14, -1.36, 0.022, 0.016, 0.009);
+    addStrut( 0.26, -0.37,  0.06, -0.85, 0.020, 0.015, 0.009);
+
+    addSoundPort(-0.31, -1.56, 0.044, 0.008, 1.0, 1.0);
+    addSoundPort(-0.20, -1.26, 0.044, 0.008, 1.0, 1.0);
   } else if (style === "bosendorfer_cross") {
-    // BÖSENDORFER IMPERIAL 290: Antique gold Viennese X-bracing + solid bass cheek extension accent
-    addStrut(-0.36, -0.36, -0.36, -1.85, 0.034, 0.024, 0.014);
-    addStrut(-0.34, -0.40, 0.04, -1.46, 0.028, 0.022, 0.014);
-    addStrut(0.06, -0.40, -0.32, -1.78, 0.028, 0.022, 0.014);
-    addStrut(0.26, -0.36, 0.22, -1.02, 0.026, 0.022, 0.014);
-    // Viennese crimson felt resonance strip along bass spine
-    const spineFelt = new THREE.Mesh(new THREE.BoxGeometry(0.018, 0.010, 1.44), feltMat);
-    spineFelt.position.set(-0.395, yPlate + 0.014, -1.12);
+    // BÖSENDORFER IMPERIAL 290: Antique gold Viennese X-bracing + crimson felt spine strip
+    addStrut(-0.36, -0.37, -0.36, -1.86, 0.028, 0.017, 0.009);
+    addStrut(-0.34, -0.40, -0.13, -1.36, 0.023, 0.016, 0.009);
+    addStrut( 0.04, -0.40, -0.31, -1.72, 0.023, 0.016, 0.009);
+    addStrut( 0.26, -0.37,  0.06, -0.84, 0.020, 0.015, 0.009);
+
+    const spineFelt = new THREE.Mesh(new THREE.BoxGeometry(0.015, 0.008, 1.44), feltMat);
+    spineFelt.position.set(-0.398, yPlate + 0.011, -1.12);
     grp.add(spineFelt);
   } else if (style === "yamaha_swept") {
-    // YAMAHA CFX: Brushed champagne-platinum swept modern V-frame + royal navy felt
-    addStrut(-0.35, -0.36, -0.34, -1.84, 0.032, 0.024, 0.015);
-    addStrut(-0.08, -0.36, -0.22, -1.82, 0.032, 0.024, 0.015);
-    addStrut(-0.08, -0.36, 0.24, -1.02, 0.028, 0.022, 0.015);
-    addStrut(0.28, -0.36, 0.36, -0.68, 0.024, 0.020, 0.015);
-    // Elongated oval sound window
-    const oval = new THREE.Mesh(
-      new THREE.TorusGeometry(0.074, 0.010, 10, 28).rotateX(Math.PI * 0.5),
-      harpMat
-    );
-    oval.position.set(-0.18, yPlate + 0.011, -1.35);
-    oval.scale.set(0.85, 1.0, 1.45);
-    grp.add(oval);
+    // YAMAHA CFX: Brushed champagne-platinum swept modern V-frame + elongated oval aperture
+    addStrut(-0.35, -0.37, -0.35, -1.86, 0.026, 0.017, 0.009);
+    addStrut(-0.08, -0.37, -0.26, -1.76, 0.025, 0.017, 0.009);
+    addStrut(-0.08, -0.37,  0.08, -0.84, 0.022, 0.016, 0.009);
+    addStrut( 0.26, -0.37,  0.22, -0.64, 0.020, 0.015, 0.009);
+
+    addSoundPort(-0.24, -1.32, 0.046, 0.008, 0.85, 1.38);
   } else if (style === "kawai_bar") {
-    // SHIGERU KAWAI SK-EX: Konsei Katagi champagne-gold harp with swept asymmetrical fan + crimson felt ribbon
-    addStrut(-0.35, -0.36, -0.35, -1.84, 0.032, 0.024, 0.014);
-    addStrut(-0.12, -0.36, -0.24, -1.82, 0.030, 0.024, 0.014);
-    addStrut(0.12, -0.36, 0.04, -1.48, 0.028, 0.022, 0.014);
-    addStrut(0.32, -0.36, 0.26, -0.98, 0.026, 0.021, 0.014);
-    addStrut(-0.35, -0.94, 0.24, -0.94, 0.024, 0.018, 0.010);
-    // Signature Shigeru crimson inner-rim accent strip
-    const crimsonRimFelt = new THREE.Mesh(new THREE.BoxGeometry(0.020, 0.012, 1.42), feltMat);
-    crimsonRimFelt.position.set(-0.392, yPlate + 0.015, -1.10);
+    // SHIGERU KAWAI SK-EX: Konsei Katagi champagne-gold harp with asymmetrical fan + crimson felt ribbon
+    addStrut(-0.35, -0.37, -0.35, -1.86, 0.026, 0.017, 0.009);
+    addStrut(-0.12, -0.37, -0.26, -1.78, 0.024, 0.017, 0.009);
+    addStrut( 0.10, -0.37, -0.13, -1.34, 0.022, 0.016, 0.009);
+    addStrut( 0.30, -0.37,  0.09, -0.82, 0.020, 0.015, 0.009);
+    addStrut(-0.35, -0.92,  0.02, -0.92, 0.018, 0.014, 0.007);
+
+    const crimsonRimFelt = new THREE.Mesh(new THREE.BoxGeometry(0.016, 0.009, 1.42), feltMat);
+    crimsonRimFelt.position.set(-0.396, yPlate + 0.011, -1.10);
     grp.add(crimsonRimFelt);
-    const portRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.066, 0.011, 10, 26).rotateX(Math.PI * 0.5),
-      harpMat
-    );
-    portRing.position.set(-0.16, yPlate + 0.011, -1.38);
-    grp.add(portRing);
+    addSoundPort(-0.22, -1.36, 0.046, 0.008, 1.0, 1.0);
   } else if (style === "bechstein_classic") {
-    // C. BECHSTEIN D 282: Berlin bronze-gold 4-bar radial cast-iron frame with twin elliptic sound apertures
-    addStrut(-0.36, -0.36, -0.35, -1.84, 0.033, 0.024, 0.014);
-    addStrut(-0.15, -0.36, -0.24, -1.82, 0.030, 0.024, 0.014);
-    addStrut(0.08, -0.36, 0.02, -1.48, 0.028, 0.022, 0.014);
-    addStrut(0.28, -0.36, 0.24, -1.02, 0.026, 0.022, 0.014);
-    const portGeo = new THREE.TorusGeometry(0.058, 0.011, 10, 24).rotateX(Math.PI * 0.5);
-    for (const [px, pz, sx] of [
-      [-0.25, -1.52, 0.85],
-      [-0.08, -1.18, 0.92],
-    ]) {
-      const ring = new THREE.Mesh(portGeo, harpMat);
-      ring.position.set(px, yPlate + 0.011, pz);
-      ring.scale.set(sx, 1.0, 1.32);
-      grp.add(ring);
-    }
+    // C. BECHSTEIN D 282: Berlin bronze-gold 4-bar radial cast-iron frame with twin elliptic apertures
+    addStrut(-0.36, -0.37, -0.35, -1.86, 0.027, 0.017, 0.009);
+    addStrut(-0.15, -0.37, -0.27, -1.78, 0.024, 0.017, 0.009);
+    addStrut( 0.07, -0.37, -0.14, -1.36, 0.022, 0.016, 0.009);
+    addStrut( 0.27, -0.37,  0.06, -0.84, 0.020, 0.015, 0.009);
+
+    addSoundPort(-0.29, -1.48, 0.042, 0.008, 0.85, 1.28);
+    addSoundPort(-0.16, -1.16, 0.040, 0.008, 0.90, 1.25);
   } else if (style === "bluthner_aliquot") {
-    // BLÜTHNER MODEL 1 · ALIQUOT: Antique Leipzig gold harp with iconic 4th-string Aliquot bridge bar & gilded resonator bridge
-    addStrut(-0.36, -0.36, -0.35, -1.85, 0.034, 0.024, 0.014);
-    addStrut(-0.14, -0.36, -0.23, -1.82, 0.030, 0.024, 0.014);
-    addStrut(0.08, -0.36, 0.02, -1.46, 0.028, 0.022, 0.014);
-    addStrut(0.28, -0.36, 0.24, -1.02, 0.026, 0.022, 0.014);
-    // Gleaming raised 4th-string Aliquot duplex bridge rail across upper-mid and treble registers!
-    const aliquotBridge = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.014, 0.016), accentMat);
-    aliquotBridge.position.set(0.14, yPlate + 0.026, -0.64);
-    aliquotBridge.rotation.y = 0.34;
+    // BLÜTHNER MODEL 1 · ALIQUOT: Antique Leipzig gold harp with 4th-string Aliquot duplex bridge
+    addStrut(-0.36, -0.37, -0.35, -1.86, 0.028, 0.017, 0.009);
+    addStrut(-0.14, -0.37, -0.26, -1.78, 0.024, 0.017, 0.009);
+    addStrut( 0.07, -0.37, -0.13, -1.36, 0.022, 0.016, 0.009);
+    addStrut( 0.27, -0.37,  0.06, -0.84, 0.020, 0.015, 0.009);
+
+    // Raised 4th-string Aliquot duplex bridge rail strictly inside treble bentside & below lid (y = 0.872)
+    const aliquotBridge = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.010, 0.014), accentMat);
+    aliquotBridge.position.set(0.06, yPlate + 0.018, -0.58);
+    aliquotBridge.rotation.y = 0.42;
     grp.add(aliquotBridge);
-    // Secondary shimmering Aliquot sympathetic string wires hovering cleanly over the treble bridge
-    const aliqStrGeo = new THREE.CylinderGeometry(0.0010, 0.0010, 0.42, 6).rotateX(Math.PI * 0.5);
+
+    // Shimmering Aliquot sympathetic string wires strictly inside treble curve
     for (let i = 0; i < 8; i++) {
       const f = i / 7;
-      const str = new THREE.Mesh(aliqStrGeo, accentMat);
-      str.position.set(0.02 + f * 0.32, yPlate + 0.031, -0.58 - (1 - f) * 0.14);
+      const sx = -0.02 + f * 0.28;
+      const zStart = -0.37;
+      const rawZEnd = -0.78 + f * 0.24;
+      const maxXAtEnd = getHarpBentsideMaxX(rawZEnd) - 0.036;
+      const clampedX = Math.min(sx, maxXAtEnd);
+      const len = Math.max(0.14, zStart - rawZEnd);
+      const strGeo = new THREE.CylinderGeometry(0.0009, 0.0009, len, 5).rotateX(Math.PI * 0.5);
+      const str = new THREE.Mesh(strGeo, accentMat);
+      str.position.set(clampedX, yPlate + 0.021, (zStart + rawZEnd) * 0.5);
       grp.add(str);
     }
-    const portRing = new THREE.Mesh(
-      new THREE.TorusGeometry(0.068, 0.012, 10, 26).rotateX(Math.PI * 0.5),
-      harpMat
-    );
-    portRing.position.set(-0.24, yPlate + 0.011, -1.48);
-    grp.add(portRing);
+    addSoundPort(-0.28, -1.46, 0.044, 0.008, 1.0, 1.0);
   } else {
-    // CRYSTAL GRAND: Openwork mirror-chrome skeleton harp exposing luminous copper bass & steel treble strings
-    addStrut(-0.37, -0.36, -0.36, -1.84, 0.024, 0.020, 0.015);
-    addStrut(-0.10, -0.36, -0.20, -1.82, 0.022, 0.020, 0.015);
-    addStrut(0.18, -0.36, 0.14, -1.18, 0.020, 0.018, 0.015);
-    // Overstrung exposed gleaming copper-wound bass string fan across the skeleton harp
+    // CRYSTAL GRAND: Openwork mirror-chrome skeleton harp strictly inside curved acrylic rim
+    addStrut(-0.37, -0.37, -0.36, -1.86, 0.020, 0.015, 0.009);
+    addStrut(-0.12, -0.37, -0.25, -1.76, 0.018, 0.015, 0.009);
+    addStrut( 0.14, -0.37, -0.04, -1.04, 0.017, 0.014, 0.009);
+
     const copperMat = new THREE.MeshPhysicalMaterial({
       color: 0xe6a656,
       metalness: 0.96,
@@ -486,23 +534,46 @@ function buildBrandHarpAssembly(style, harpMat, feltMat, accentMat, crestTex) {
       roughness: 0.10,
       envMapIntensity: 1.95,
     });
-    const bassStrGeo = new THREE.CylinderGeometry(0.0016, 0.0016, 1.44, 6);
-    bassStrGeo.rotateX(Math.PI * 0.5);
-    for (let i = 0; i < 14; i++) {
-      const f = i / 13;
-      const sMesh = new THREE.Mesh(bassStrGeo, copperMat);
-      sMesh.position.set(-0.34 + f * 0.24, yPlate + 0.022, -1.10);
-      sMesh.rotation.y = -0.08 + f * 0.06;
+    const unitStrGeo = new THREE.CylinderGeometry(1, 1, 1, 5);
+    const pA = new THREE.Vector3();
+    const pB = new THREE.Vector3();
+    const dir = new THREE.Vector3();
+    const up = new THREE.Vector3(0, 1, 0);
+
+    // Overstrung exposed copper-wound bass fan strictly inside bentside
+    for (let i = 0; i < 12; i++) {
+      const f = i / 11;
+      const x0 = -0.36 + f * 0.15;
+      const z0 = -0.37;
+      const z1 = -1.86 + f * 0.36;
+      const x1 = Math.min(-0.34 + f * 0.20, getHarpBentsideMaxX(z1) - 0.04);
+      pA.set(x0, yPlate + 0.017, z0);
+      pB.set(x1, yPlate + 0.017, z1);
+      dir.subVectors(pB, pA);
+      const len = dir.length();
+      dir.divideScalar(len);
+      const sMesh = new THREE.Mesh(unitStrGeo, copperMat);
+      sMesh.position.copy(pA).addScaledVector(dir, len * 0.5);
+      sMesh.quaternion.setFromUnitVectors(up, dir);
+      sMesh.scale.set(0.0014, len, 0.0014);
       grp.add(sMesh);
     }
-    const trebStrGeo = new THREE.CylinderGeometry(0.0010, 0.0010, 0.86, 6);
-    trebStrGeo.rotateX(Math.PI * 0.5);
-    for (let i = 0; i < 16; i++) {
-      const f = i / 15;
-      const sMesh = new THREE.Mesh(trebStrGeo, steelMat);
-      const lenScale = 1.0 - f * 0.48;
-      sMesh.scale.set(1, 1, lenScale);
-      sMesh.position.set(-0.04 + f * 0.40, yPlate + 0.017, -0.40 - 0.40 * lenScale);
+    // Exposed gleaming steel treble strings strictly inside bentside
+    for (let i = 0; i < 14; i++) {
+      const f = i / 13;
+      const x0 = -0.14 + f * 0.48;
+      const z0 = -0.37;
+      const z1 = -1.52 + Math.pow(f, 0.72) * 0.98;
+      const x1 = Math.min(x0, getHarpBentsideMaxX(z1) - 0.04);
+      pA.set(x0, yPlate + 0.013, z0);
+      pB.set(x1, yPlate + 0.013, z1);
+      dir.subVectors(pB, pA);
+      const len = dir.length();
+      dir.divideScalar(len);
+      const sMesh = new THREE.Mesh(unitStrGeo, steelMat);
+      sMesh.position.copy(pA).addScaledVector(dir, len * 0.5);
+      sMesh.quaternion.setFromUnitVectors(up, dir);
+      sMesh.scale.set(0.0009, len, 0.0009);
       grp.add(sMesh);
     }
   }
@@ -516,9 +587,9 @@ function buildBrandHarpAssembly(style, harpMat, feltMat, accentMat, crestTex) {
       polygonOffset: true,
       polygonOffsetFactor: -2,
     });
-    const crest = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.22), crestMat);
+    const crest = new THREE.Mesh(new THREE.PlaneGeometry(0.20, 0.20), crestMat);
     crest.rotation.x = -Math.PI * 0.5;
-    crest.position.set(-0.22, yPlate + 0.026, -0.82);
+    crest.position.set(-0.22, yPlate + 0.022, -0.82);
     grp.add(crest);
   }
 
@@ -750,12 +821,12 @@ export function buildBrandArchitecture(pianoAnchor, isSoftwareGL = false, maxAni
     polygonOffsetUnits: -3,
   });
   const bentsideLogoMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.46, 0.086),
+    new THREE.PlaneGeometry(0.36, 0.068),
     bentsideLogoMat
   );
   bentsideLogoMesh.name = "BrandArch_BentsideLogo";
-  // Positioned neatly along the straight cheek/bentside exterior facing +X audience
-  bentsideLogoMesh.position.set(0.478, 0.795, -0.34);
+  // Positioned flush along the straight treble cheek exterior facing +X audience (before bentside curves at z=-0.50)
+  bentsideLogoMesh.position.set(0.470, 0.790, -0.25);
   bentsideLogoMesh.rotation.y = Math.PI * 0.5;
   fasciaGroup.add(bentsideLogoMesh);
 
@@ -924,12 +995,13 @@ export function buildBrandArchitecture(pianoAnchor, isSoftwareGL = false, maxAni
       crystalMat.needsUpdate = true;
     } else {
       fasciaBacking.material = caseMat;
-      caseMat.color.setHex(v.caseColor ?? 0x0b0b0d);
-      caseMat.roughness = v.caseRoughness ?? 0.05;
-      caseMat.metalness = v.caseMetalness ?? 0.02;
-      caseMat.clearcoat = v.caseClearcoat ?? 1.0;
-      caseMat.clearcoatRoughness = v.caseClearcoatRoughness ?? 0.024;
-      caseMat.envMapIntensity = v.caseEnvIntensity ?? 1.48;
+      caseMat.color.setHex(v.caseColor ?? 0x030305);
+      caseMat.roughness = v.caseRoughness ?? 0.08;
+      caseMat.metalness = v.caseMetalness ?? 0.0;
+      caseMat.clearcoat = v.caseClearcoat ?? 0.84;
+      caseMat.clearcoatRoughness = v.caseClearcoatRoughness ?? 0.046;
+      caseMat.envMapIntensity = v.caseEnvIntensity ?? 0.58;
+      if ("reflectivity" in caseMat) caseMat.reflectivity = 0.48;
       caseMat.needsUpdate = true;
     }
 

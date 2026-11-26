@@ -17,6 +17,12 @@ import {
 } from "./academy_catalog.js";
 import { CONCERT_HALLS, LISTENING_ZONES } from "./concert_halls.js";
 import { formatClock } from "./hall_acoustics.js";
+import {
+  PIECE_VERSIONS,
+  DEFAULT_PIECE_VERSION_ID,
+  getAlternateScoreIdForVersion,
+} from "./piece_versions.js";
+import { createLessonsController } from "./academy_lessons.js";
 
 function escapeHtml(str) {
   return String(str ?? "")
@@ -74,20 +80,31 @@ export function createAcademyController({
   modalEl,
   repertoire,
   getCurrentPieceId,
+  getCurrentVersionId,
   getActiveHallId,
   getActiveZoneId,
   onSelectPiece,
   onSelectHall,
   onSelectZone,
+  onPlayNoteOn,
+  onPlayNoteOff,
+  onPracticePieceSlow,
   onClose,
 }) {
   const bodyEl = modalEl.querySelector("#academy-body");
   const tabBtns = Array.from(modalEl.querySelectorAll(".academy-tab"));
   const closeBtn = modalEl.querySelector("#academy-close-btn");
 
+  const lessonsCtrl = createLessonsController({
+    onPlayNoteOn,
+    onPlayNoteOff,
+    onPracticePieceSlow,
+  });
+  let lessonsMounted = false;
+
   const state = {
     open: false,
-    activeTab: "works", // "works" | "composers" | "genres" | "halls"
+    activeTab: "works", // "works" | "composers" | "genres" | "halls" | "learn"
     genreFilter: "all",
     composerFilter: "all",
     sortBy: "popularity", // "popularity" | "duration_asc" | "duration_desc" | "difficulty" | "year"
@@ -102,7 +119,17 @@ export function createAcademyController({
     meta: getPieceAcademyMeta(piece),
   }));
 
+  function unmountLessonsIfNeeded() {
+    if (lessonsMounted) {
+      lessonsCtrl.unmount();
+      lessonsMounted = false;
+    }
+  }
+
   function setActiveTab(tabId) {
+    if (state.activeTab === "learn" && tabId !== "learn") {
+      unmountLessonsIfNeeded();
+    }
     state.activeTab = tabId;
     for (const btn of tabBtns) {
       const isAct = btn.dataset.academyTab === tabId;
@@ -122,6 +149,7 @@ export function createAcademyController({
 
   function close() {
     if (!state.open) return;
+    unmountLessonsIfNeeded();
     state.open = false;
     modalEl.hidden = true;
     onClose?.();
@@ -188,8 +216,33 @@ export function createAcademyController({
         : filtered
             .map(({ piece, meta }) => {
               const isCurrent = piece.id === curPieceId;
+              const activeVerId = getCurrentVersionId?.() || DEFAULT_PIECE_VERSION_ID;
               const isExpanded = state.expandedPieceId === piece.id;
               const durClock = formatClock(piece.durationSec);
+              const supportsVersions = piece.playbackMode === "sampled";
+              const altVirtuoso = supportsVersions
+                ? getAlternateScoreIdForVersion(piece.id, "virtuoso")
+                : null;
+              const versionBarHtml = supportsVersions
+                ? `
+                  <div class="ac-version-bar" role="group" aria-label="Версия исполнения">
+                    <span class="ac-version-label">Версия:</span>
+                    ${PIECE_VERSIONS.map((v) => {
+                      const activeChip = isCurrent && activeVerId === v.id;
+                      const hint =
+                        v.id === "virtuoso" && altVirtuoso
+                          ? "Переключает на подлинную III часть Presto agitato (6 538 нот)"
+                          : v.description;
+                      return `<button type="button" class="ac-version-btn ${activeChip ? "is-active" : ""}" data-play-piece="${piece.id}" data-play-version="${v.id}" title="${escapeHtml(hint)}">${escapeHtml(v.label)}</button>`;
+                    }).join("")}
+                    ${
+                      altVirtuoso
+                        ? `<span class="ac-version-note">«Виртуозная» включает III ч. Presto agitato</span>`
+                        : ""
+                    }
+                  </div>
+                `
+                : "";
               return `
                 <article class="ac-work-row ${isCurrent ? "is-current" : ""}">
                   <div class="ac-work-main">
@@ -209,6 +262,7 @@ export function createAcademyController({
                         <span aria-hidden="true">·</span>
                         <span>${escapeHtml(meta.difficultyLabel)}</span>
                       </div>
+                      ${versionBarHtml}
                     </div>
                     <div class="ac-work-actions">
                       <button type="button" class="ac-secondary-btn" data-toggle-story="${piece.id}">
@@ -321,7 +375,8 @@ export function createAcademyController({
     });
     bodyEl.querySelectorAll("[data-play-piece]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        onSelectPiece(btn.dataset.playPiece, true);
+        const ver = btn.dataset.playVersion || null;
+        onSelectPiece(btn.dataset.playPiece, true, ver);
         close();
       });
     });
@@ -416,7 +471,8 @@ export function createAcademyController({
     });
     bodyEl.querySelectorAll("[data-play-piece]").forEach((btn) => {
       btn.addEventListener("click", () => {
-        onSelectPiece(btn.dataset.playPiece, true);
+        const ver = btn.dataset.playVersion || null;
+        onSelectPiece(btn.dataset.playPiece, true, ver);
         close();
       });
     });
@@ -571,10 +627,17 @@ export function createAcademyController({
 
   function render() {
     if (!state.open) return;
+    if (state.activeTab !== "learn") {
+      unmountLessonsIfNeeded();
+    }
     if (state.activeTab === "works") renderWorksTab();
     else if (state.activeTab === "composers") renderComposersTab();
     else if (state.activeTab === "genres") renderGenresTab();
     else if (state.activeTab === "halls") renderHallsTab();
+    else if (state.activeTab === "learn") {
+      lessonsCtrl.mount(bodyEl);
+      lessonsMounted = true;
+    }
   }
 
   tabBtns.forEach((btn) => {
@@ -596,7 +659,7 @@ export function createAcademyController({
     toggle,
     isOpen: () => state.open,
     refresh: () => {
-      if (state.open) render();
+      if (state.open && state.activeTab !== "learn") render();
     },
   };
 }

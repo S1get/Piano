@@ -99,9 +99,48 @@ function createBeveledNaturalKeyGeometry(width, height, length) {
   return geo;
 }
 
+// Exact measured unscaled interior bentside wall X(z) of `stein_1780_fortepiano.glb`
+// (`Resonanzboden_Anhangleiste_Rail`, straight bass spine inner wall at x = -0.456).
+const UNSCALED_BENTSIDE_CURVE = [
+  [-0.35,  0.450],
+  [-0.50,  0.446],
+  [-0.60,  0.330],
+  [-0.70,  0.225],
+  [-0.80,  0.148],
+  [-0.90,  0.091],
+  [-1.00,  0.051],
+  [-1.10,  0.012],
+  [-1.20, -0.027],
+  [-1.30, -0.053],
+  [-1.40, -0.086],
+  [-1.50, -0.117],
+  [-1.60, -0.148],
+  [-1.70, -0.181],
+  [-1.80, -0.219],
+  [-1.90, -0.280],
+  [-2.00, -0.419],
+  [-2.07, -0.456],
+];
+
+export function getUnscaledBentsideMaxX(z) {
+  if (z >= UNSCALED_BENTSIDE_CURVE[0][0]) return UNSCALED_BENTSIDE_CURVE[0][1];
+  const last = UNSCALED_BENTSIDE_CURVE[UNSCALED_BENTSIDE_CURVE.length - 1];
+  if (z <= last[0]) return last[1];
+  for (let i = 0; i < UNSCALED_BENTSIDE_CURVE.length - 1; i++) {
+    const [z0, x0] = UNSCALED_BENTSIDE_CURVE[i];
+    const [z1, x1] = UNSCALED_BENTSIDE_CURVE[i + 1];
+    if (z <= z0 && z >= z1) {
+      const t = (z - z0) / (z1 - z0);
+      return x0 + (x1 - x0) * t;
+    }
+  }
+  return last[1];
+}
+
 /**
- * Measures the exact unscaled keywell, hammer, damper, and string plane from the loaded 1780 GLB
- * in `pianoAnchor` local space BEFORE scaling `root`.
+ * Measures ONLY the playing keycap surfaces of the unscaled 1780 GLB in `pianoAnchor` local space
+ * (strictly excluding internal rear lever beams & Hammerkapsel pivots that sit higher/further back),
+ * and clamps against verified GLB keywell bounds so the 88-key keyboard sits 100% flush inside the cheek blocks.
  */
 function measureUnscaledKeywell(pianoAnchor, rigNodes) {
   pianoAnchor.updateMatrixWorld(true);
@@ -110,103 +149,79 @@ function measureUnscaledKeywell(pianoAnchor, rigNodes) {
   let minX = Infinity;
   let maxX = -Infinity;
   let natTopY = -Infinity;
-  let natBotY = Infinity;
   let natFrontZ = -Infinity;
   let natBackZ = Infinity;
   let sharpTopY = -Infinity;
-  let sharpFrontZ = -Infinity;
-  let validKeys = 0;
+  let validCaps = 0;
 
   for (let i = 0; i < rigNodes.keys.length; i++) {
     const kNode = rigNodes.keys[i];
     if (!kNode) continue;
-    _box.setFromObject(kNode);
-    if (_box.isEmpty()) continue;
-    _minL.copy(_box.min).applyMatrix4(_invAnchor);
-    _maxL.copy(_box.max).applyMatrix4(_invAnchor);
+    kNode.traverse((ch) => {
+      if (!ch.isMesh) return;
+      const ln = (ch.name || "").toLowerCase();
+      // Only measure actual playing keytop caps — ignore rear LimewoodLever & Hammerkapsel!
+      const isNatCap = ln.includes("ebonynatural") || ln.includes("keynatural");
+      const isSharpCap = ln.includes("ivoryslip") || ln.includes("sharpbody");
+      if (!isNatCap && !isSharpCap) return;
 
-    const x0 = Math.min(_minL.x, _maxL.x);
-    const x1 = Math.max(_minL.x, _maxL.x);
-    const y0 = Math.min(_minL.y, _maxL.y);
-    const y1 = Math.max(_minL.y, _maxL.y);
-    const z0 = Math.min(_minL.z, _maxL.z);
-    const z1 = Math.max(_minL.z, _maxL.z);
+      _box.setFromObject(ch);
+      if (_box.isEmpty()) return;
+      _minL.copy(_box.min).applyMatrix4(_invAnchor);
+      _maxL.copy(_box.max).applyMatrix4(_invAnchor);
 
-    if (x0 < minX) minX = x0;
-    if (x1 > maxX) maxX = x1;
+      const x0 = Math.min(_minL.x, _maxL.x);
+      const x1 = Math.max(_minL.x, _maxL.x);
+      const y1 = Math.max(_minL.y, _maxL.y);
+      const z0 = Math.min(_minL.z, _maxL.z);
+      const z1 = Math.max(_minL.z, _maxL.z);
 
-    const midi61 = 29 + i;
-    const isSharp = BLACK_PCS.has(((midi61 % 12) + 12) % 12);
-    if (isSharp) {
-      if (y1 > sharpTopY) sharpTopY = y1;
-      if (z1 > sharpFrontZ) sharpFrontZ = z1;
-    } else {
-      if (y1 > natTopY) natTopY = y1;
-      if (y0 < natBotY) natBotY = y0;
-      if (z1 > natFrontZ) natFrontZ = z1;
-      if (z0 < natBackZ) natBackZ = z0;
-    }
-    validKeys++;
+      if (x0 < minX) minX = x0;
+      if (x1 > maxX) maxX = x1;
+
+      if (isSharpCap) {
+        if (y1 > sharpTopY) sharpTopY = y1;
+      } else {
+        if (y1 > natTopY) natTopY = y1;
+        if (z1 > natFrontZ) natFrontZ = z1;
+        if (z0 < natBackZ) natBackZ = z0;
+      }
+      validCaps++;
+    });
   }
 
-  // Fallback to calibrated Stein 1780 GLB measurements if traversal failed
-  if (validKeys < 10 || !Number.isFinite(minX)) {
-    minX = -0.422;
+  // Verified exact Stein 1780 GLB playing-keycap coordinates (inside Keyframe_SideCheeks ±0.4242)
+  if (validCaps < 12 || !Number.isFinite(minX)) {
+    minX = -0.421;
     maxX = 0.422;
-    natTopY = 0.742;
-    natBotY = 0.720;
-    natFrontZ = 0.102;
-    natBackZ = -0.025;
-    sharpTopY = 0.754;
-    sharpFrontZ = 0.056;
+    natTopY = 0.722;
+    natFrontZ = -0.017;
+    natBackZ = -0.147;
+    sharpTopY = 0.733;
+  } else {
+    minX = Math.max(-0.422, Math.min(-0.405, minX));
+    maxX = Math.min(0.422, Math.max(0.405, maxX));
+    natTopY = Math.max(0.716, Math.min(0.728, natTopY));
+    natFrontZ = Math.max(-0.025, Math.min(-0.008, natFrontZ));
+    natBackZ = Math.max(-0.150, Math.min(-0.135, natBackZ));
+    sharpTopY = Math.max(natTopY + 0.010, Math.min(natTopY + 0.016, sharpTopY));
   }
 
-  // Measure average hammer & damper & string height
-  let hammerY = natTopY + 0.075;
-  let hammerZ = natBackZ - 0.14;
-  let damperY = natTopY + 0.092;
-  let damperZ = natBackZ - 0.23;
-  let stringY = natTopY + 0.088;
-
-  const midHammer = rigNodes.hammers[30];
-  if (midHammer) {
-    _box.setFromObject(midHammer);
-    if (!_box.isEmpty()) {
-      _minL.copy(_box.min).applyMatrix4(_invAnchor);
-      _maxL.copy(_box.max).applyMatrix4(_invAnchor);
-      hammerY = Math.max(_minL.y, _maxL.y) - 0.008;
-      hammerZ = (_minL.z + _maxL.z) * 0.5;
-    }
-  }
-  const midDamper = rigNodes.dampers[30];
-  if (midDamper) {
-    _box.setFromObject(midDamper);
-    if (!_box.isEmpty()) {
-      _minL.copy(_box.min).applyMatrix4(_invAnchor);
-      _maxL.copy(_box.max).applyMatrix4(_invAnchor);
-      damperY = (_minL.y + _maxL.y) * 0.5;
-      damperZ = (_minL.z + _maxL.z) * 0.5;
-    }
-  }
-  const midCourse = rigNodes.courses[30];
-  if (midCourse) {
-    _box.setFromObject(midCourse);
-    if (!_box.isEmpty()) {
-      _minL.copy(_box.min).applyMatrix4(_invAnchor);
-      _maxL.copy(_box.max).applyMatrix4(_invAnchor);
-      stringY = (_minL.y + _maxL.y) * 0.5;
-    }
-  }
+  // Calibrated unscaled hammer, damper & string planes strictly below closed lid underside (y = 0.895)
+  const hammerY = 0.784;
+  const hammerZ = -0.274;
+  const damperY = 0.844;
+  const damperZ = -0.294;
+  const stringY = 0.854;
 
   return {
     minX,
     maxX,
     natTopY,
-    natBotY,
+    natBotY: natTopY - 0.018,
     natFrontZ,
     natBackZ,
     sharpTopY,
-    sharpFrontZ,
     hammerY,
     hammerZ,
     damperY,
@@ -223,24 +238,24 @@ export function buildModern88KeyConcertAction(
 ) {
   const m = measureUnscaledKeywell(pianoAnchor, rigNodes);
 
-  // Calibrate to the scaled modern concert grand case (1.36x wide, 1.08x deep, 1.0x tall)
+  // Calibrate strictly inside the scaled modern concert grand cheek blocks (±0.4242 * 1.36 = ±0.5769)
   const scaledMinX = m.minX * MODERN_CASE_SCALE_X;
   const scaledMaxX = m.maxX * MODERN_CASE_SCALE_X;
-  const keybedSpanX = Math.max(1.06, (scaledMaxX - scaledMinX) * 0.992);
+  const keybedSpanX = Math.min(1.138, (scaledMaxX - scaledMinX) * 0.990);
   const centerX = (scaledMinX + scaledMaxX) * 0.5;
   const leftEdgeX = centerX - keybedSpanX * 0.5;
 
-  const natTopY = m.natTopY;
-  const keyThick = Math.max(0.017, Math.min(0.024, m.natTopY - m.natBotY));
+  const natTopY = m.natTopY + 0.002;
+  const keyThick = 0.018;
   const frontZ = m.natFrontZ * MODERN_CASE_SCALE_Z;
-  const backZ = Math.min(frontZ - 0.138, m.natBackZ * MODERN_CASE_SCALE_Z);
-  const natLen = Math.max(0.136, frontZ - backZ);
-  const sharpLen = natLen * 0.625;
-  const sharpHeight = Math.max(0.0115, Math.min(0.0155, m.sharpTopY - m.natTopY + 0.002));
+  const backZ = m.natBackZ * MODERN_CASE_SCALE_Z;
+  const natLen = Math.max(0.134, Math.min(0.148, frontZ - backZ));
+  const sharpLen = natLen * 0.62;
+  const sharpHeight = 0.0128;
 
-  const whitePitch = keybedSpanX / 52.0; // ~21.9 mm per white key (authentic concert grand!)
-  const whiteWidth = whitePitch * 0.948; // ~1.1 mm crisp inter-key shadow gap
-  const blackWidth = whitePitch * 0.575; // ~12.6 mm concert grand ebony sharp
+  const whitePitch = keybedSpanX / 52.0; // ~21.8 mm per white key (authentic concert grand!)
+  const whiteWidth = whitePitch * 0.946; // ~1.2 mm crisp inter-key shadow gap
+  const blackWidth = whitePitch * 0.575; // ~12.5 mm concert grand ebony sharp
 
   const group = new THREE.Group();
   group.name = "ConcertGrand_88Key_Action";
@@ -432,14 +447,16 @@ export function buildModern88KeyConcertAction(
   }
 
   // --------------------------------------------------------------------------
-  // 4. BUILD 88 INDIVIDUAL ANIMATED CONCERT HAMMERS & OVERHEAD DAMPERS
+  // 4. BUILD 88 HAMMERS & 72 OVERHEAD DAMPERS AS 5 GPU INSTANCED MESHES (~400 fewer draw calls!)
   // --------------------------------------------------------------------------
   const hammerPivotY = m.hammerY - 0.012;
   const hammerPivotZ = m.hammerZ * MODERN_CASE_SCALE_Z;
   const damperRestY = m.damperY;
   const damperBaseZ = m.damperZ * MODERN_CASE_SCALE_Z;
+  const DAMPER_COUNT = 72; // Uppermost 16 treble notes (MIDI 93..108) are undamped like real concert grands!
 
   // Compact wooden shank + teardrop wool felt hammer head + colored underfelt core
+  // All offset relative to the hammer pivot at (0, 0, 0) so rotating around X swings the head cleanly!
   const shankGeo = new THREE.BoxGeometry(0.0044, 0.0046, 0.072);
   shankGeo.translate(0, 0, -0.036);
   const underfeltGeo = new THREE.BoxGeometry(0.0074, 0.015, 0.013);
@@ -452,57 +469,92 @@ export function buildModern88KeyConcertAction(
   const damperFeltGeo = new THREE.BoxGeometry(0.0076, 0.006, 0.032);
   damperFeltGeo.translate(0, -0.008, 0);
 
-  const hammerPivots = new Array(CONCERT_GRAND_TOTAL_KEYS);
-  const damperPivots = new Array(CONCERT_GRAND_TOTAL_KEYS);
-  const damperRestYs = new Float32Array(CONCERT_GRAND_TOTAL_KEYS);
+  const hammerShanksInst = new THREE.InstancedMesh(shankGeo, hammerShankMat, CONCERT_GRAND_TOTAL_KEYS);
+  hammerShanksInst.name = "ConcertGrand_HammerShanks_Inst";
+  hammerShanksInst.frustumCulled = false;
+
+  const hammerHeadsInst = new THREE.InstancedMesh(headFeltGeo, hammerFeltMat, CONCERT_GRAND_TOTAL_KEYS);
+  hammerHeadsInst.name = "ConcertGrand_HammerHeads_Inst";
+  hammerHeadsInst.frustumCulled = false;
+
+  const hammerUnderfeltsInst = !isMobile
+    ? new THREE.InstancedMesh(underfeltGeo, hammerUnderfeltMat, CONCERT_GRAND_TOTAL_KEYS)
+    : null;
+  if (hammerUnderfeltsInst) {
+    hammerUnderfeltsInst.name = "ConcertGrand_HammerUnderfelts_Inst";
+    hammerUnderfeltsInst.frustumCulled = false;
+  }
+
+  const damperWoodsInst = new THREE.InstancedMesh(damperWoodGeo, damperHeadMat, DAMPER_COUNT);
+  damperWoodsInst.name = "ConcertGrand_DamperWoods_Inst";
+  damperWoodsInst.frustumCulled = false;
+
+  const damperFeltsInst = new THREE.InstancedMesh(damperFeltGeo, hammerFeltMat, DAMPER_COUNT);
+  damperFeltsInst.name = "ConcertGrand_DamperFelts_Inst";
+  damperFeltsInst.frustumCulled = false;
+
+  const hammerXs = new Float32Array(CONCERT_GRAND_TOTAL_KEYS);
+  const hammerScales = new Float32Array(CONCERT_GRAND_TOTAL_KEYS);
+  const lastHammerRot = new Float32Array(CONCERT_GRAND_TOTAL_KEYS).fill(-999);
+
+  const damperZs = new Float32Array(DAMPER_COUNT);
+  const damperRestYs = new Float32Array(DAMPER_COUNT);
+  const lastDamperY = new Float32Array(DAMPER_COUNT).fill(-999);
+
+  function writeHammerInstance(i, rotX) {
+    const hx = hammerXs[i];
+    const sz = hammerScales[i];
+    _dummy.position.set(hx, hammerPivotY, hammerPivotZ);
+    _dummy.rotation.set(rotX, 0, 0);
+    _dummy.scale.set(1, 1, 1);
+    _dummy.updateMatrix();
+    hammerShanksInst.setMatrixAt(i, _dummy.matrix);
+
+    _dummy.scale.set(sz, sz, sz);
+    _dummy.updateMatrix();
+    hammerHeadsInst.setMatrixAt(i, _dummy.matrix);
+    if (hammerUnderfeltsInst) {
+      hammerUnderfeltsInst.setMatrixAt(i, _dummy.matrix);
+    }
+    lastHammerRot[i] = rotX;
+  }
+
+  function writeDamperInstance(i, yVal) {
+    _dummy.position.set(hammerXs[i], yVal, damperZs[i]);
+    _dummy.rotation.set(0, 0, 0);
+    _dummy.scale.set(1, 1, 1);
+    _dummy.updateMatrix();
+    damperWoodsInst.setMatrixAt(i, _dummy.matrix);
+    damperFeltsInst.setMatrixAt(i, _dummy.matrix);
+    lastDamperY[i] = yVal;
+  }
 
   for (let i = 0; i < CONCERT_GRAND_TOTAL_KEYS; i++) {
     const t = i / (CONCERT_GRAND_TOTAL_KEYS - 1);
-    const hx = keyXPos[i] * 0.965;
-    // Authentic concert grand hammer/damper graduation (heavier in bass, smaller/lighter in high treble)
-    const sizeScale = 1.18 - t * 0.42;
+    hammerXs[i] = keyXPos[i] * 0.965;
+    hammerScales[i] = 1.18 - t * 0.42;
+    writeHammerInstance(i, 0);
 
-    const hPivot = new THREE.Group();
-    hPivot.name = `Hammer88_${i}`;
-    hPivot.position.set(hx, hammerPivotY, hammerPivotZ);
-
-    const shank = new THREE.Mesh(shankGeo, hammerShankMat);
-    const head = new THREE.Mesh(headFeltGeo, hammerFeltMat);
-    head.scale.set(sizeScale, sizeScale, sizeScale);
-    hPivot.add(shank, head);
-
-    if (!isMobile) {
-      const under = new THREE.Mesh(underfeltGeo, hammerUnderfeltMat);
-      under.scale.set(sizeScale, sizeScale, sizeScale);
-      hPivot.add(under);
-    }
-
-    group.add(hPivot);
-    hammerPivots[i] = hPivot;
-
-    // Uppermost 18 treble notes (MIDI 91..108) on real concert grands are undamped (free sympathetic shimmer!),
-    // while the lower 70 courses have individual overhead dampers that lift cleanly on key & sustain pedal.
-    if (i < 72) {
-      const dPivot = new THREE.Group();
-      dPivot.name = `Damper88_${i}`;
-      const dz = damperBaseZ - (1.0 - t) * 0.045;
-      dPivot.position.set(hx, damperRestY, dz);
-
-      const dWood = new THREE.Mesh(damperWoodGeo, damperHeadMat);
-      const dFelt = new THREE.Mesh(damperFeltGeo, hammerFeltMat);
-      dPivot.add(dWood, dFelt);
-      group.add(dPivot);
-
-      damperPivots[i] = dPivot;
+    if (i < DAMPER_COUNT) {
+      damperZs[i] = damperBaseZ - (1.0 - t) * 0.045;
       damperRestYs[i] = damperRestY;
-    } else {
-      damperPivots[i] = null;
-      damperRestYs[i] = damperRestY;
+      writeDamperInstance(i, damperRestY);
     }
   }
 
+  hammerShanksInst.instanceMatrix.needsUpdate = true;
+  hammerHeadsInst.instanceMatrix.needsUpdate = true;
+  if (hammerUnderfeltsInst) hammerUnderfeltsInst.instanceMatrix.needsUpdate = true;
+  damperWoodsInst.instanceMatrix.needsUpdate = true;
+  damperFeltsInst.instanceMatrix.needsUpdate = true;
+
+  group.add(hammerShanksInst, hammerHeadsInst, damperWoodsInst, damperFeltsInst);
+  if (hammerUnderfeltsInst) group.add(hammerUnderfeltsInst);
+
+
   // --------------------------------------------------------------------------
   // 5. OVERSTRUNG 88-COURSE CONCERT HARP STRINGS (2 GPU InstancedMeshes total!)
+  //    Strictly clamped inside the exact measured GLB bentside wall contour!
   // --------------------------------------------------------------------------
   const BASS_COUNT = 26; // MIDI 21 (A0) .. MIDI 46 (Bb2) — diagonal copper-wound overstrung bass fan
   const TREBLE_COUNT = CONCERT_GRAND_TOTAL_KEYS - BASS_COUNT; // 62 steel tenor/treble courses
@@ -516,21 +568,41 @@ export function buildModern88KeyConcertAction(
   trebleStringsMesh.name = "ConcertGrand_SteelTrebleStrings";
   trebleStringsMesh.frustumCulled = false;
 
-  const baseStringY = m.stringY;
-  const wrestplankZ = backZ - 0.16;
+  const baseStringY = Math.min(0.854, m.stringY);
+  const wrestplankZ = -0.39 * MODERN_CASE_SCALE_Z; // -0.4212 (cleanly behind front wrestplank bar)
+  const scaledMinSpineX = -0.456 * MODERN_CASE_SCALE_X + 0.056; // -0.564 (strictly inside bass spine)
+  const getScaledBentsideLimitX = (zScaled, margin = 0.052) => {
+    const zUnscaled = zScaled / MODERN_CASE_SCALE_Z;
+    return getUnscaledBentsideMaxX(zUnscaled) * MODERN_CASE_SCALE_X - margin;
+  };
+  const clampStringEndpoint = (xStart, zStart, rawXEnd, rawZEnd) => {
+    const zEnd = Math.max(-1.94 * MODERN_CASE_SCALE_Z, Math.min(wrestplankZ - 0.14, rawZEnd));
+    let xEnd = Math.max(scaledMinSpineX, Math.min(getScaledBentsideLimitX(zEnd, 0.055), rawXEnd));
+    // Also verify intermediate points along the concave bentside curve never poke outside
+    for (const frac of [0.35, 0.55, 0.75]) {
+      const mx = xStart + (xEnd - xStart) * frac;
+      const mz = zStart + (zEnd - zStart) * frac;
+      const maxMidX = getScaledBentsideLimitX(mz, 0.048);
+      if (mx > maxMidX) {
+        xEnd = Math.max(scaledMinSpineX, xEnd - (mx - maxMidX) / frac - 0.008);
+      }
+    }
+    return [xEnd, zEnd];
+  };
 
-  // Populate overstrung diagonal bass fan (elevated +14 mm over tenor bridge, sweeping toward rear right tail)
+  // Populate overstrung diagonal bass fan (elevated +10 mm over tenor bridge, sweeping cleanly inside tail curve)
   for (let i = 0; i < BASS_COUNT; i++) {
     const u = i / Math.max(1, BASS_COUNT - 1);
-    const xStart = keyXPos[i] * 0.94;
-    const zStart = wrestplankZ - 0.02 - u * 0.04;
-    // Fan sweeps diagonally from left-front wrestplank toward right-rear bass bridge
-    const xEnd = -0.18 + u * 0.44;
-    const zEnd = -1.96 + u * 0.42;
-    const yBass = baseStringY + 0.016;
+    const xStart = Math.max(scaledMinSpineX, Math.min(getScaledBentsideLimitX(wrestplankZ, 0.055), keyXPos[i] * 0.92));
+    const zStart = wrestplankZ - u * 0.03;
+    // Fan sweeps diagonally from left-front wrestplank toward rear bass bridge strictly inside bentside
+    const rawZEnd = (-1.92 + u * 0.48) * MODERN_CASE_SCALE_Z;
+    const rawXEnd = -0.46 + u * 0.30;
+    const [xEnd, zEnd] = clampStringEndpoint(xStart, zStart, rawXEnd, rawZEnd);
+    const yBass = baseStringY + 0.011; // 0.865 — safely 30 mm below closed lid (0.895)
 
     _pA.set(xStart, yBass, zStart);
-    _pB.set(xEnd, yBass + 0.003, zEnd);
+    _pB.set(xEnd, yBass + 0.002, zEnd);
     _dir.subVectors(_pB, _pA);
     const len = _dir.length();
     _dir.divideScalar(len);
@@ -538,7 +610,7 @@ export function buildModern88KeyConcertAction(
 
     _dummy.position.copy(_pA).addScaledVector(_dir, len * 0.5);
     _dummy.quaternion.copy(_quat);
-    const radius = 0.0019 - u * 0.00055;
+    const radius = 0.0018 - u * 0.0005;
     _dummy.scale.set(radius, len, radius);
     _dummy.updateMatrix();
     bassStringsMesh.setMatrixAt(i, _dummy.matrix);
@@ -550,11 +622,12 @@ export function buildModern88KeyConcertAction(
   for (let j = 0; j < TREBLE_COUNT; j++) {
     const i = BASS_COUNT + j;
     const u = j / Math.max(1, TREBLE_COUNT - 1);
-    const xStart = keyXPos[i] * 0.96;
-    const zStart = wrestplankZ - 0.04 + u * 0.05;
-    // Exponential concert-grand string scaling curve from long tenor to short sparkling treble
-    const xEnd = -0.34 + u * 0.86;
-    const zEnd = -1.88 + Math.pow(u, 0.72) * 1.44;
+    const xStart = Math.max(scaledMinSpineX, Math.min(getScaledBentsideLimitX(wrestplankZ, 0.055), keyXPos[i] * 0.94));
+    const zStart = wrestplankZ - 0.02 + u * 0.03;
+    // Exponential concert-grand string scaling curve strictly nestled inside curved bentside hitch-pin rail
+    const rawZEnd = (-1.84 + Math.pow(u, 0.68) * 1.30) * MODERN_CASE_SCALE_Z;
+    const rawXEnd = xStart - (1.0 - u) * 0.12;
+    const [xEnd, zEnd] = clampStringEndpoint(xStart, zStart, rawXEnd, rawZEnd);
     const ySteel = baseStringY + 0.002;
 
     _pA.set(xStart, ySteel, zStart);
@@ -566,7 +639,7 @@ export function buildModern88KeyConcertAction(
 
     _dummy.position.copy(_pA).addScaledVector(_dir, len * 0.5);
     _dummy.quaternion.copy(_quat);
-    const radius = 0.0011 - u * 0.00035;
+    const radius = 0.00105 - u * 0.00032;
     _dummy.scale.set(radius, len, radius);
     _dummy.updateMatrix();
     trebleStringsMesh.setMatrixAt(j, _dummy.matrix);
@@ -631,12 +704,15 @@ export function buildModern88KeyConcertAction(
       keySlipMat.opacity = 0.44;
       keySlipMat.roughness = 0.04;
       keySlipMat.clearcoat = 1.0;
+      keySlipMat.envMapIntensity = 1.65;
     } else {
-      keySlipMat.color.setHex(v.caseColor ?? 0x0b0b0d);
+      keySlipMat.color.setHex(v.caseColor ?? 0x030305);
       keySlipMat.transparent = false;
       keySlipMat.opacity = 1.0;
-      keySlipMat.roughness = v.caseRoughness ?? 0.07;
-      keySlipMat.clearcoat = v.caseClearcoat ?? 0.98;
+      keySlipMat.roughness = v.caseRoughness ?? 0.08;
+      keySlipMat.clearcoat = v.caseClearcoat ?? 0.84;
+      keySlipMat.envMapIntensity = v.caseEnvIntensity ?? 0.58;
+      if ("reflectivity" in keySlipMat) keySlipMat.reflectivity = 0.48;
     }
     keySlipMat.needsUpdate = true;
   }
@@ -652,6 +728,9 @@ export function buildModern88KeyConcertAction(
 
   function updateKeyVisuals(keyPos, keyHand, hammerPhase, damperLift, sustainLift, keyGlowEnabled) {
     const globalPedalLift = sustainLift * 0.0085;
+    let hammersDirty = false;
+    let dampersDirty = false;
+
     for (let i = 0; i < CONCERT_GRAND_TOTAL_KEYS; i++) {
       // 1. Key dip rotation (+X rotates front edge downward ~10 mm)
       const dip = keyPos[i];
@@ -671,15 +750,32 @@ export function buildModern88KeyConcertAction(
         }
       }
 
-      // 3. Hammer strike arc (rotates upward around X to strike strings cleanly)
-      hammerPivots[i].rotation.x = hammerPhase[i] * 0.42;
-
-      // 4. Individual + Sustain Pedal overhead damper lift
-      const dPivot = damperPivots[i];
-      if (dPivot) {
-        const lift = Math.max(damperLift[i] * 0.011, globalPedalLift);
-        dPivot.position.y = damperRestYs[i] + lift;
+      // 3. Instanced Hammer strike arc — ONLY write GPU matrix when hammer actually moved!
+      const targetRot = hammerPhase[i] * 0.42;
+      if (Math.abs(targetRot - lastHammerRot[i]) > 0.0012) {
+        writeHammerInstance(i, targetRot);
+        hammersDirty = true;
       }
+
+      // 4. Instanced Overhead Damper lift — ONLY write GPU matrix when damper moved!
+      if (i < DAMPER_COUNT) {
+        const lift = Math.max(damperLift[i] * 0.011, globalPedalLift);
+        const targetY = damperRestYs[i] + lift;
+        if (Math.abs(targetY - lastDamperY[i]) > 0.00018) {
+          writeDamperInstance(i, targetY);
+          dampersDirty = true;
+        }
+      }
+    }
+
+    if (hammersDirty) {
+      hammerShanksInst.instanceMatrix.needsUpdate = true;
+      hammerHeadsInst.instanceMatrix.needsUpdate = true;
+      if (hammerUnderfeltsInst) hammerUnderfeltsInst.instanceMatrix.needsUpdate = true;
+    }
+    if (dampersDirty) {
+      damperWoodsInst.instanceMatrix.needsUpdate = true;
+      damperFeltsInst.instanceMatrix.needsUpdate = true;
     }
   }
 
@@ -719,8 +815,6 @@ export function buildModern88KeyConcertAction(
     keyMeshes,
     keyMeshToMidi,
     keyAnchors88,
-    hammerPivots,
-    damperPivots,
     applyKeyStyle,
     syncPianoModelVisual,
     clearAllKeyEmissives,
